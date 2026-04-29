@@ -23,14 +23,29 @@ if [ -z "$PYTHON" ]; then
     exit 1
 fi
 PY_VERSION=$($PYTHON --version 2>&1 | awk '{print $2}')
+PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
+PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
 echo "✅ Python $PY_VERSION found"
 
-# --- 3. Install portaudio via Homebrew ---
+if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 13 ]; then
+    echo "⚠️  Warning: MLX is tested on Python 3.10–3.12. Python $PY_VERSION may have issues."
+    echo "   If you hit errors, install Python 3.11: brew install python@3.11"
+fi
+
+# --- 3. Install system dependencies via Homebrew ---
 if ! brew list portaudio &>/dev/null; then
-    echo "📦 Installing portaudio via Homebrew..."
+    echo "📦 Installing portaudio..."
     brew install portaudio
 else
     echo "✅ portaudio already installed"
+fi
+
+# ffmpeg is required by mlx_whisper to decode audio files
+if ! command -v ffmpeg &>/dev/null; then
+    echo "📦 Installing ffmpeg (required by mlx_whisper)..."
+    brew install ffmpeg
+else
+    echo "✅ ffmpeg already installed ($(ffmpeg -version 2>&1 | head -1 | awk '{print $3}'))"
 fi
 
 # --- 4. Create venv ---

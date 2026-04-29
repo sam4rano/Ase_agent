@@ -49,13 +49,15 @@ You should see `(venv)` in your terminal prompt.
 
 ---
 
-## Step 3 — Install System Dependency (PortAudio)
+## Step 3 — Install System Dependencies
 
-`sounddevice` requires PortAudio, which is not installed by default on macOS:
+`sounddevice` requires PortAudio, and `mlx_whisper` requires **ffmpeg** to decode audio files. Neither is installed by default on macOS:
 
 ```bash
-brew install portaudio
+brew install portaudio ffmpeg
 ```
+
+> **Why ffmpeg?** `mlx_whisper` uses ffmpeg internally to load any audio format. Without it, you get `FileNotFoundError: 'ffmpeg'` even on a freshly-created WAV file.
 
 ---
 
