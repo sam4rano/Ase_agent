@@ -1,8 +1,8 @@
 """
 src/stt_engine.py
 
-MLX Whisper STT with Yoruba-first transcription and confidence gating.
-Handles: low confidence, hallucination detection, code-switching detection, temp file cleanup.
+MLX Whisper STT — auto-detects language (English, Yoruba, mixed).
+Filters hallucinations before returning text.
 """
 
 import mlx_whisper
@@ -15,14 +15,14 @@ import re
 from config.settings import (
     WHISPER_MODEL_ID,
     WHISPER_PRIMARY_LANGUAGE,
-    CONFIDENCE_FALLBACK,
 )
 
 
 class YorubaSTT:
     def __init__(self, model_id: str = WHISPER_MODEL_ID):
         self.model_id = model_id
-        print(f"🔊 Whisper ready ({model_id.split('/')[-1]})")
+        lang_label = WHISPER_PRIMARY_LANGUAGE or "auto-detect"
+        print(f"🔊 Whisper ready ({model_id.split('/')[-1]}, language={lang_label})")
 
     def transcribe(self, audio_array: np.ndarray, sample_rate: int = 16000) -> dict:
         """
@@ -32,7 +32,7 @@ class YorubaSTT:
             {
                 "text": str,
                 "language": str,
-                "confidence": float (0–1),
+                "confidence": float (0-1),
                 "is_code_switched": bool,
             }
         """
@@ -40,63 +40,42 @@ class YorubaSTT:
         try:
             return self._run(tmp_path)
         finally:
-            os.unlink(tmp_path)  # always clean up the temp file
+            os.unlink(tmp_path)
 
     # ── Internal ──────────────────────────────────────────────────────────
 
     def _write_wav(self, audio: np.ndarray, sample_rate: int) -> str:
-        """Write float32 array to a temporary WAV file. Returns the path."""
         fd, path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         with wave.open(path, "w") as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16-bit PCM
+            wf.setsampwidth(2)
             wf.setframerate(sample_rate)
             wf.writeframes((audio * 32767).astype(np.int16).tobytes())
         return path
 
     def _run(self, wav_path: str) -> dict:
-        """Run Whisper twice if needed (Yoruba-first, then auto-detect fallback)."""
-        _empty = {"text": "", "language": "yo", "confidence": 0.0, "is_code_switched": False}
+        _empty = {"text": "", "language": "en", "confidence": 0.0, "is_code_switched": False}
 
-        # Primary: force Yoruba
-        result_yo = mlx_whisper.transcribe(
+        result = mlx_whisper.transcribe(
             wav_path,
             path_or_hf_repo=self.model_id,
-            language=WHISPER_PRIMARY_LANGUAGE,
+            language=WHISPER_PRIMARY_LANGUAGE,  # None = auto-detect (English, Yoruba, mixed)
             word_timestamps=True,
             fp16=True,
         )
-        text_yo = result_yo["text"].strip()
-        confidence = self._estimate_confidence(result_yo)
 
-        # Gate 1: Whisper's own no-speech detector.
-        # When no_speech_prob > 0.6 the model itself says there was no speech — trust it.
-        if self._avg_no_speech_prob(result_yo) > 0.6:
+        text = result["text"].strip()
+        confidence = self._estimate_confidence(result)
+        language = result.get("language", "en")
+
+        # Gate 1: Whisper says there was no speech — trust it.
+        if self._avg_no_speech_prob(result) > 0.6:
             return _empty
 
-        # Gate 2: Hallucination detector.
-        # Whisper on noise/silence hallucinates looping characters:
-        # "å å å å...", "మారిలిలిలి...", "..." repeated, etc.
-        if self._is_hallucination(text_yo):
+        # Gate 2: Hallucination on noise → looping characters (å å å, మారిలి...).
+        if self._is_hallucination(text):
             return _empty
-
-        text = text_yo
-        language = result_yo.get("language", WHISPER_PRIMARY_LANGUAGE)
-
-        # Fallback: if low confidence, try auto-detect
-        if confidence < CONFIDENCE_FALLBACK:
-            result_auto = mlx_whisper.transcribe(
-                wav_path,
-                path_or_hf_repo=self.model_id,
-                language=None,
-                fp16=True,
-            )
-            auto_text = result_auto["text"].strip()
-            if len(auto_text) > len(text_yo) and not self._is_hallucination(auto_text):
-                text = auto_text
-                language = result_auto.get("language", "auto")
-                print(f"ℹ️  Low confidence ({confidence:.0%}), switched to auto-detect")
 
         return {
             "text": text,
@@ -106,43 +85,35 @@ class YorubaSTT:
         }
 
     def _avg_no_speech_prob(self, result: dict) -> float:
-        """Average no_speech_prob across all segments. 0 = speech, 1 = silence."""
         segments = result.get("segments", [])
         if not segments:
-            return 1.0  # no segments → treat as silence
+            return 1.0
         return float(np.mean([s.get("no_speech_prob", 0.0) for s in segments]))
 
     def _is_hallucination(self, text: str) -> bool:
         """
-        Detect Whisper hallucination patterns on noise/silence:
-        - A single character/word repeated >10 times in a row  (e.g. "å å å å å å å å å å å")
-        - Text that is >70% the same character across the whole string
-        - Empty or whitespace-only text
+        Detect repeated-token or repeated-character hallucination patterns.
+        Examples: "å å å å å å å å", "మారిలిలిలిలిలిలి...", "... ... ... ..."
         """
         if not text or not text.strip():
             return True
 
-        # Check for repeated tokens: split by whitespace, see if one token dominates
         tokens = text.split()
         if len(tokens) >= 8:
             most_common = max(set(tokens), key=tokens.count)
             if tokens.count(most_common) / len(tokens) > 0.6:
                 return True
 
-        # Check for a single character dominating the whole string
         chars = [c for c in text if not c.isspace()]
-        if chars:
+        if len(chars) > 10:
             most_common_char = max(set(chars), key=chars.count)
-            if chars.count(most_common_char) / len(chars) > 0.7 and len(chars) > 10:
+            if chars.count(most_common_char) / len(chars) > 0.7:
                 return True
 
         return False
 
     def _estimate_confidence(self, result: dict) -> float:
-        """
-        Map Whisper's avg_logprob (−∞ to 0) to a 0–1 confidence score.
-        −0.2 ≈ 0.87 (good), −1.0 ≈ 0.33 (poor), −1.5 ≈ 0.0 (very poor).
-        """
+        """avg_logprob: 0 is perfect, -1.5 is very poor. Map to 0-1."""
         segments = result.get("segments", [])
         if not segments:
             return 0.0
@@ -150,11 +121,7 @@ class YorubaSTT:
         return float(np.clip(1.0 + avg_logprob / 1.5, 0.0, 1.0))
 
     def _detect_code_switching(self, text: str) -> bool:
-        """
-        Flag text as code-switched when >30% of words appear to be English.
-        Yoruba words that look like English are excluded from the count.
-        """
-        # Yoruba function words that could be mistaken for English
+        """True if >30% of words look like English mixed into non-English speech."""
         yoruba_lookalikes = {
             "mo", "ni", "ti", "si", "fun", "ko", "o", "a", "wa", "se",
             "bi", "to", "lo", "ba", "le", "fi", "ma", "pa", "ran", "wo",
@@ -162,8 +129,5 @@ class YorubaSTT:
         words = re.findall(r"\b[a-zA-Z]+\b", text)
         if not words:
             return False
-        english_words = [
-            w for w in words
-            if w.lower() not in yoruba_lookalikes and len(w) > 2
-        ]
+        english_words = [w for w in words if w.lower() not in yoruba_lookalikes and len(w) > 2]
         return (len(english_words) / len(words)) > 0.3

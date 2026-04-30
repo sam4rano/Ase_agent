@@ -16,9 +16,9 @@ NOISE_CALIBRATION_SECS = 1.5 # how long to listen before starting
 # ── STT ────────────────────────────────────────────────────────────────────
 WHISPER_MODEL_SIZE = "small"
 WHISPER_MODEL_ID = f"mlx-community/whisper-{WHISPER_MODEL_SIZE}-mlx"
-WHISPER_PRIMARY_LANGUAGE = "yo"   # Yoruba first
-CONFIDENCE_THRESHOLD = 0.45       # below this → ask to repeat
-CONFIDENCE_FALLBACK = 0.55        # below this → try auto-detect
+WHISPER_PRIMARY_LANGUAGE = None  # Auto-detect: understands English, Yoruba, and mixed speech
+CONFIDENCE_THRESHOLD = 0.40       # below this → ask to repeat
+CONFIDENCE_FALLBACK = 0.55        # kept for future use (single-pass now)
 
 # ── LLM ────────────────────────────────────────────────────────────────────
 LLM_MODEL_ID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
