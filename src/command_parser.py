@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 from mlx_lm import load, generate
+from mlx_lm.sample_utils import make_sampler
 
 from config.settings import (
     LLM_MODEL_ID,
@@ -73,7 +74,7 @@ class CommandParser:
             self.tokenizer,
             prompt=prompt,
             max_tokens=LLM_MAX_TOKENS,
-            temp=LLM_TEMPERATURE,
+            sampler=make_sampler(temp=LLM_TEMPERATURE),
         ).strip()
 
         commands = self._safe_parse_json(raw, text)

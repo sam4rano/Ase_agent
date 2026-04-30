@@ -2,7 +2,7 @@
 src/stt_engine.py
 
 MLX Whisper STT with Yoruba-first transcription and confidence gating.
-Handles: low confidence, code-switching detection, temp file cleanup.
+Handles: low confidence, hallucination detection, code-switching detection, temp file cleanup.
 """
 
 import mlx_whisper
@@ -57,6 +57,8 @@ class YorubaSTT:
 
     def _run(self, wav_path: str) -> dict:
         """Run Whisper twice if needed (Yoruba-first, then auto-detect fallback)."""
+        _empty = {"text": "", "language": "yo", "confidence": 0.0, "is_code_switched": False}
+
         # Primary: force Yoruba
         result_yo = mlx_whisper.transcribe(
             wav_path,
@@ -67,6 +69,17 @@ class YorubaSTT:
         )
         text_yo = result_yo["text"].strip()
         confidence = self._estimate_confidence(result_yo)
+
+        # Gate 1: Whisper's own no-speech detector.
+        # When no_speech_prob > 0.6 the model itself says there was no speech — trust it.
+        if self._avg_no_speech_prob(result_yo) > 0.6:
+            return _empty
+
+        # Gate 2: Hallucination detector.
+        # Whisper on noise/silence hallucinates looping characters:
+        # "å å å å...", "మారిలిలిలి...", "..." repeated, etc.
+        if self._is_hallucination(text_yo):
+            return _empty
 
         text = text_yo
         language = result_yo.get("language", WHISPER_PRIMARY_LANGUAGE)
@@ -80,7 +93,7 @@ class YorubaSTT:
                 fp16=True,
             )
             auto_text = result_auto["text"].strip()
-            if len(auto_text) > len(text_yo):
+            if len(auto_text) > len(text_yo) and not self._is_hallucination(auto_text):
                 text = auto_text
                 language = result_auto.get("language", "auto")
                 print(f"ℹ️  Low confidence ({confidence:.0%}), switched to auto-detect")
@@ -91,6 +104,39 @@ class YorubaSTT:
             "confidence": confidence,
             "is_code_switched": self._detect_code_switching(text),
         }
+
+    def _avg_no_speech_prob(self, result: dict) -> float:
+        """Average no_speech_prob across all segments. 0 = speech, 1 = silence."""
+        segments = result.get("segments", [])
+        if not segments:
+            return 1.0  # no segments → treat as silence
+        return float(np.mean([s.get("no_speech_prob", 0.0) for s in segments]))
+
+    def _is_hallucination(self, text: str) -> bool:
+        """
+        Detect Whisper hallucination patterns on noise/silence:
+        - A single character/word repeated >10 times in a row  (e.g. "å å å å å å å å å å å")
+        - Text that is >70% the same character across the whole string
+        - Empty or whitespace-only text
+        """
+        if not text or not text.strip():
+            return True
+
+        # Check for repeated tokens: split by whitespace, see if one token dominates
+        tokens = text.split()
+        if len(tokens) >= 8:
+            most_common = max(set(tokens), key=tokens.count)
+            if tokens.count(most_common) / len(tokens) > 0.6:
+                return True
+
+        # Check for a single character dominating the whole string
+        chars = [c for c in text if not c.isspace()]
+        if chars:
+            most_common_char = max(set(chars), key=chars.count)
+            if chars.count(most_common_char) / len(chars) > 0.7 and len(chars) > 10:
+                return True
+
+        return False
 
     def _estimate_confidence(self, result: dict) -> float:
         """

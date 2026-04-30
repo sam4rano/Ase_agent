@@ -11,13 +11,13 @@ import os
 # Allow imports from project root (for config/)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pyttsx3
+import subprocess
 
 from audio_recorder import AudioRecorder
 from stt_engine import YorubaSTT
 from command_parser import CommandParser
 from mac_executor import MacExecutor
-from config.settings import CONFIDENCE_THRESHOLD, TTS_RATE
+from config.settings import CONFIDENCE_THRESHOLD, TTS_VOICE, TTS_RATE
 
 
 class YorubaAgent:
@@ -31,15 +31,14 @@ class YorubaAgent:
         self.parser = CommandParser()
         self.executor = MacExecutor()
 
-        self.tts = pyttsx3.init()
-        self.tts.setProperty("rate", TTS_RATE)
 
     # ── TTS ───────────────────────────────────────────────────────────────
 
     def speak(self, text: str):
         print(f"🔊 {text}")
-        self.tts.say(text)
-        self.tts.runAndWait()
+        # macOS 'say' sounds human, pyttsx3 sounds robotic.
+        # -v: voice, -r: words-per-minute. Falls back silently if say is unavailable.
+        subprocess.run(["say", "-v", TTS_VOICE, "-r", str(TTS_RATE), text], check=False)
 
     # ── Result → Yoruba phrases ───────────────────────────────────────────
 
