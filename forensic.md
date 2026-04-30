@@ -48,3 +48,19 @@ To elevate Àṣẹ from a "voice-to-terminal" script to an **autonomous local a
 ### 5. Multi-Step Reasoning (Agentic Loop)
 *   **Current State**: Implemented a ReAct (Reasoning + Acting) loop in `main.py` allowing up to 3 execution steps. The LLM evaluates the result of the first command and can issue subsequent commands or a `{"action":"done"}` if the goal is achieved.
 *   **Roadmap**: Enhance error recovery by feeding AppleScript error traces directly back into the ReAct loop so the LLM can rewrite its actions on the fly.
+
+---
+
+## 🏗️ Deep Forensic Audit (April 30, 2026)
+
+We performed a comprehensive audit of the system to identify and fix 20 critical and significant architectural issues.
+
+### Key Fixes Implemented:
+1.  **Fixed `search_web` Crash**: The agent now correctly routes searches through the Playwright browser.
+2.  **Real STT Confidence**: Replaced the hardcoded `0.9` confidence placeholder with actual per-token log-probability extraction from Whisper. The confidence gate is now functional.
+3.  **Memory Pruning**: Added auto-pruning to the SQLite database (capped at 100 rows) to prevent unbounded growth and protect data-at-rest.
+4.  **Graceful Browser Shutdown**: Playwright processes are now correctly terminated on `Ctrl+C`.
+5.  **Robust App Matching**: App fuzzy matching now prefers the shortest/canonical app name (e.g., "Safari" vs "Safari Technology Preview").
+6.  **Security Hardening**: Blocked dangerous URL schemes (`javascript:`, `data:`, etc.) and updated the threat model documentation.
+7.  **Resource Optimization**: Added `--no-vlm` and `--no-wakeword` CLI flags for users on constrained 8GB machines.
+8.  **Test Coverage**: Created a new test suite for the Memory module and expanded the Executor tests to mock heavy vision dependencies.

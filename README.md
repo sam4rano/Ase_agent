@@ -23,9 +23,26 @@ bash setup.sh
 # 4. Run the Agent
 source venv/bin/activate
 python3 src/main.py
+
+# Optional Flags:
+# python3 src/main.py --no-vlm       # Skip loading the 2B Vision model (saves ~4GB RAM)
+# python3 src/main.py --no-wakeword  # Use push-to-talk (ENTER key) instead of background listening
 ```
 
 See **[instruction.md](instruction.md)** for the deep-dive setup guide.
+
+---
+
+## 🧪 Testing
+
+We maintain a robust suite of unit tests for core logic (Parser, Executor, Memory).
+
+```bash
+# Run all tests
+source venv/bin/activate
+pip install pytest
+pytest tests/ -v
+```
 
 ---
 
@@ -46,7 +63,7 @@ graph TD;
 
 | Component | Model / Library |
 |---|---|
-| **STT Engine** | `LyngualLabs/whisper-small-yoruba` (Fine-tuned Whisper on HuggingFace) |
+| **STT Engine** | `LyngualLabs/whisper-small-yoruba` (Fine-tuned Whisper) |
 | **Command Parser** | `mlx-community/Qwen2.5-1.5B-Instruct-4bit` (via MLX) |
 | **Wake Word Engine** | `openWakeWord` (Continuous background listening) |
 | **Memory & State** | Built-in `sqlite3` for rolling contextual memory |
@@ -61,8 +78,6 @@ graph TD;
 
 ## 🗣️ Example Commands
 
-Speak naturally in Yorùbá. The agent understands code-switching and complex multi-step instructions.
-
 | Yorùbá Input | Agent Action |
 |---|---|
 | `ṣi Chrome` | Opens Google Chrome |
@@ -70,34 +85,27 @@ Speak naturally in Yorùbá. The agent understands code-switching and complex mu
 | `wa Fela Kuti` | Performs a Google Search in your default browser |
 | `ya aworan` | Takes a screenshot and saves it to your Desktop |
 | `wa faili orin` | Opens Spotlight and searches for files matching "orin" |
-| `tẹ play lori youtube` | **Visual Click**: Takes a screenshot, locates the play button using the Vision Model, and clicks it |
-| `pa á rẹ` | **Contextual Memory**: Checks the database for the last opened app and forcefully closes it |
+| `tẹ play lori youtube` | **Visual Click**: Uses Vision Model to locate and click elements |
+| `pa á rẹ` | **Contextual Memory**: Closes the last opened app |
 | `ṣi Chrome ki o si lọ si github.com` | **Multi-action**: Opens Chrome, then navigates to GitHub |
 
 ---
 
 ## 🧩 Plug-and-Play Modularity
 
-Àṣẹ is built to be a hacker's playground. You can easily bring your own intelligence models! 
-Want to use a different Text-to-Speech model? A custom Wake Word? The architecture strictly separates concerns so you can swap out core components with just a configuration change.
-
-- **Bring Your Own STT**: Swap `LyngualLabs/whisper-small-yoruba` in `config/settings.py` for any HuggingFace ASR pipeline.
-- **Bring Your Own TTS**: Swap `facebook/mms-tts-yor` for Flow-Matching architectures like F5-TTS or XTTS simply by updating `src/tts_engine.py`.
-- **Bring Your Own LLM**: You can swap the Qwen parser for a local LLaMA-3 model by changing the ID in `config/settings.py` (just ensure you update the JSON system prompt formatting).
-- **Custom Wake Words**: Use `openWakeWord` to train a model for your own voice phrase and plug the ONNX file into `src/wake_word.py`.
-
-See **[contributors.md](contributors.md)** for a deep dive into swapping out these engines.
+- **Bring Your Own STT**: Swap models in `config/settings.py`.
+- **Bring Your Own TTS**: Swap models in `src/tts_engine.py`.
+- **Bring Your Own LLM**: Change the ID in `config/settings.py`.
+- **Custom Wake Words**: Train your own phrase via `openWakeWord`.
 
 ---
 
 ## 📚 Documentation
 
-Want to understand how we got here or how to help us reach full autonomy?
-
-- **[forensic.md](forensic.md)** — A deep dive into our engineering journey, the models we tested (and rejected), and the roadmap to making Àṣẹ visually and continuously autonomous.
-- **[contributors.md](contributors.md)** — Step-by-step guides on how to swap out the STT/LLM/TTS models and safely add new commands to the MacExecutor.
-- **[security.md](security.md)** — Threat model, allowlisting, and system mitigation strategies.
-- **[plan.md](plan.md)** — The original architectural phases and success criteria.
+- **[forensic.md](forensic.md)** — Engineering journey, audit results, and roadmap.
+- **[contributors.md](contributors.md)** — Guide to swapping engines.
+- **[security.md](security.md)** — Threat model and mitigations.
+- **[plan.md](plan.md)** — Architectural phases.
 
 ---
 
