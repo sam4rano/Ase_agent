@@ -30,21 +30,21 @@ This document outlines the engineering journey, architectural decisions, model f
 To elevate Àṣẹ from a "voice-to-terminal" script to an **autonomous local agent**, the following architectural leaps must be made by contributors:
 
 ### 1. Visual Grounding ("Giving the Agent Eyes")
-*   **Current State**: The agent uses `osascript` to open URLs. If you say "Play Burna Boy on YouTube", it can open the search page, but it is **blind**. It cannot click the actual video.
-*   **Roadmap**: We must integrate browser automation (e.g., `Playwright`) paired with a lightweight Vision-Language Model (VLM) like `Qwen2-VL-2B`. The VLM takes a screenshot, identifies the coordinates of the "Play" button, and Playwright clicks it.
+*   **Current State**: Implemented! Integrated `playwright` (`src/browser_agent.py`) and `Qwen2-VL-2B` (`src/vlm_engine.py`). When the user issues a `visual_click` command, the agent takes a screenshot of the Playwright browser, asks the VLM for coordinates, and automatically clicks the requested element.
+*   **Roadmap**: Currently using DOM fallback if the VLM fails to load on constrained memory environments (like an 8GB M1 Mac). Future contributors should test lightweight, distilled VLMs (e.g., `< 1GB`) for faster inference.
 
 ### 2. Continuous Listening (Wake Word)
-*   **Current State**: Push-to-talk (Press ENTER).
-*   **Roadmap**: Integrate a lightweight, offline wake-word engine (like `openWakeWord` or `Porcupine`) trained specifically on the wake phrase **"Ẹ n lẹ Àṣẹ"** (Hello Ase). This allows the agent to run completely hands-free in the background.
+*   **Current State**: Implemented using `openWakeWord`. The agent continuously listens in the background without requiring keyboard interaction. It currently uses a placeholder "hey_jarvis" model.
+*   **Roadmap**: Train a custom openWakeWord ONNX model specifically on the Yorùbá wake phrase **"Ẹ n lẹ Àṣẹ"** and integrate it.
 
 ### 3. State & Memory Management
-*   **Current State**: Stateless. Every command is treated as a completely new interaction.
-*   **Roadmap**: Implement a rolling context window or a lightweight Vector Database (e.g., `ChromaDB` or `SQLite`). If a user says *"Close it"*, the agent needs to check its memory to know what *"it"* refers to (e.g., the Chrome tab it opened 2 minutes ago).
+*   **Current State**: Implemented an SQLite-backed memory module (`src/memory.py`). The agent now maintains a rolling context of previous interactions. If a user says *"Close it"*, the agent uses this context to determine the target application.
+*   **Roadmap**: Optimize the context window size and integrate vector embeddings for longer-term semantic search.
 
 ### 4. Dynamic Yorùbá Response Generation
-*   **Current State**: Maps system statuses to hardcoded Yorùbá phrases (`ok:` -> *"Mo ti ṣe é"*).
-*   **Roadmap**: Once a reliable, local Yorùbá Diacritics model is found (or fine-tuned), the agent should dynamically generate conversational Yorùbá responses based on the context of the action, rather than relying on 4 hardcoded phrases. 
+*   **Current State**: Implemented! The `Qwen2.5-1.5B` parser now dynamically generates conversational Yorùbá responses (e.g., `{"action": "done", "response": "..."}`) after evaluating execution results in the ReAct loop, instead of relying exclusively on the 4 hardcoded phrases.
+*   **Roadmap**: While the infrastructure is fully active, the LLM may still occasionally hallucinate incorrect diacritics. Future contributors should swap the Qwen model for a fine-tuned Yorùbá local LLM to guarantee perfect tone marks for the TTS engine. 
 
 ### 5. Multi-Step Reasoning (Agentic Loop)
-*   **Current State**: Single-pass execution (Listen -> Parse JSON -> Execute).
-*   **Roadmap**: Implement a ReAct (Reasoning + Acting) loop. The LLM should be able to say: *"I need to open Chrome, wait for it to load, search Google, read the results, and then tell the user."* If an AppleScript fails, the LLM should catch the error and try an alternative method automatically.
+*   **Current State**: Implemented a ReAct (Reasoning + Acting) loop in `main.py` allowing up to 3 execution steps. The LLM evaluates the result of the first command and can issue subsequent commands or a `{"action":"done"}` if the goal is achieved.
+*   **Roadmap**: Enhance error recovery by feeding AppleScript error traces directly back into the ReAct loop so the LLM can rewrite its actions on the fly.

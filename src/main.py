@@ -20,6 +20,8 @@ from stt_engine import YorubaSTT
 from tts_engine import YorubaTTS
 from command_parser import CommandParser
 from mac_executor import MacExecutor
+from memory import AgentMemory
+from wake_word import WakeWordEngine
 from config.settings import CONFIDENCE_THRESHOLD
 
 
@@ -34,6 +36,8 @@ class YorubaAgent:
         self.tts = YorubaTTS()
         self.parser = CommandParser()
         self.executor = MacExecutor()
+        self.memory = AgentMemory()
+        self.wake_engine = WakeWordEngine()
 
     # ── TTS ───────────────────────────────────────────────────────────────
 
@@ -75,7 +79,14 @@ class YorubaAgent:
 
         while True:
             try:
-                input("[ ENTER to speak ] ")
+                if self.wake_engine.is_ready:
+                    # Continuous listening mode
+                    self.recorder.listen_for_wake_word(self.wake_engine)
+                    # Small beep or confirmation can be added here, but we will just speak:
+                    self.speak("Mo wa pelu re")
+                else:
+                    # Push-to-talk fallback
+                    input("\n[ ENTER to speak ] ")
 
                 # 1. Record
                 audio, was_clipped = self.recorder.record_utterance()
@@ -109,22 +120,47 @@ class YorubaAgent:
                         consecutive_low_confidence = 0
                     continue
 
-                consecutive_low_confidence = 0
+                # 4. ReAct Loop
+                max_steps = 3
+                step = 0
+                all_results = []
+                final_response = None
+                
+                while step < max_steps:
+                    context = self.memory.get_recent_context()
+                    commands = self.parser.parse(stt_result, memory_context=context)
+                    
+                    if not commands:
+                        if step == 0:
+                            self.speak("Emi ko ye ohun ti o fẹ")
+                        break
+                        
+                    print(f"⚙️  Step {step+1}/{max_steps} | {len(commands)} command(s): {commands}")
+                    
+                    if len(commands) == 1 and commands[0].get("action") == "done":
+                        final_response = commands[0].get("response")
+                        break
+                        
+                    commands = [cmd for cmd in commands if cmd.get("action") != "done"]
+                    if not commands:
+                        break
 
-                # 4. Parse
-                commands = self.parser.parse(stt_result)
-                if not commands:
-                    self.speak("Emi ko ye ohun ti o fẹ")
-                    continue
+                    # 5. Execute
+                    results = self.executor.execute_queue(commands)
+                    print(f"   results: {results}")
+                    all_results.extend(results)
 
-                print(f"⚙️  {len(commands)} command(s): {commands}")
+                    # Save to Memory
+                    self.memory.add_interaction(text, commands, results)
+                    
+                    step += 1
 
-                # 5. Execute
-                results = self.executor.execute_queue(commands)
-                print(f"   results: {results}")
-
-                # 6. Respond
-                self.speak(self.results_to_yoruba(results))
+                # 6. Respond (Dynamic)
+                if final_response:
+                    print(f"🗣️  Dynamic Response: {final_response}")
+                    self.speak(final_response)
+                else:
+                    self.speak(self.results_to_yoruba(all_results))
 
             except KeyboardInterrupt:
                 self.speak("O dabọ")

@@ -13,10 +13,16 @@ Build a lightweight, offline-capable voice assistant that:
 - Controls macOS: opens apps, navigates the web, searches files, types text
 - Responds in Yoruba via text-to-speech
 
-**Non-goals (V2 scope):**
-- Wake-word detection (push-to-talk only)
+**Completed Goals (V2 scope):**
+- Wake-word detection (via `openWakeWord`)
+- SQLite-backed memory for context
+- ReAct Agentic Loop
+- Visual Grounding via Playwright + VLM
+
+**Non-goals (V3 scope):**
 - Multi-user or networked operation
 - iOS / cross-platform
+- Fully fine-tuned Yorùbá LLM for perfect diacritics
 
 ---
 

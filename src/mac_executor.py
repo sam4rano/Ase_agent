@@ -9,6 +9,10 @@ import subprocess
 import time
 import urllib.parse
 import getpass
+import os
+
+from browser_agent import BrowserAgent
+from vlm_engine import VLMEngine
 
 from config.settings import (
     ALLOWED_ACTIONS,
@@ -22,6 +26,9 @@ _USER = getpass.getuser()
 
 
 class MacExecutor:
+    def __init__(self):
+        self.browser = BrowserAgent(headless=False)
+        self.vlm = VLMEngine()
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -46,8 +53,10 @@ class MacExecutor:
         try:
             if action == "open_app":
                 return self.open_app(cmd["target"])
+            elif action == "close_app":
+                return self.close_app(cmd["target"])
             elif action == "open_website":
-                return self.open_website_in_chrome(cmd["url"])
+                return self.browser.navigate(cmd["url"])
             elif action == "search_web":
                 return self.search_web(cmd["query"])
             elif action == "search_files":
@@ -56,6 +65,8 @@ class MacExecutor:
                 return self.type_text(cmd["text"])
             elif action == "take_screenshot":
                 return self.take_screenshot()
+            elif action == "visual_click":
+                return self.visual_click(cmd["element_name"])
             elif action == "unknown":
                 return f"unknown:{cmd.get('raw', '')}"
         except KeyError as e:
@@ -87,26 +98,22 @@ class MacExecutor:
 
         return f"warn:Launched {app_name} but could not verify it is running"
 
-    def open_website_in_chrome(self, url: str) -> str:
-        """Navigate to url in Chrome's front tab. Opens Chrome if needed."""
-        # Ensure Chrome is open
-        self.open_app("Google Chrome")
-        time.sleep(CHROME_OPEN_WAIT)
-
-        script = f'''
-        tell application "Google Chrome"
-            activate
-            if (count of windows) = 0 then make new window
-            set URL of active tab of front window to "{url}"
-        end tell
-        '''
-        _, success = self._applescript(script)
+    def close_app(self, app_name: str) -> str:
+        """Close an app gracefully."""
+        _, success = self._applescript(f'tell application "{app_name}" to quit')
         if success:
-            return f"ok:Opened {url}"
+            return f"ok:Closed {app_name}"
+        
+        # Fallback: killall
+        r = subprocess.run(["killall", app_name], capture_output=True)
+        if r.returncode == 0:
+            return f"ok:Force closed {app_name}"
+            
+        return f"error:Could not close {app_name}"
 
-        # Fallback: shell open
-        subprocess.run(["open", "-a", "Google Chrome", url])
-        return f"ok:Opened {url} via fallback"
+    def open_website_in_chrome(self, url: str) -> str:
+        """(Deprecated) AppleScript navigation, now handled by browser_agent."""
+        pass
 
     def search_web(self, query: str) -> str:
         """Google-search for query in Chrome."""
@@ -152,6 +159,39 @@ class MacExecutor:
         if result.returncode == 0:
             return f"ok:Screenshot saved to Desktop"
         return "warn:Screenshot cancelled"
+
+    def visual_click(self, element_name: str) -> str:
+        """
+        Uses VLM to find element_name in the browser, then clicks it via Playwright.
+        """
+        if not self.browser.page:
+            return "error: Browser not running. Navigate to a URL first."
+            
+        if not self.vlm.is_ready:
+            # Fallback to DOM click if VLM isn't loaded (e.g., M1 constraints)
+            print("⚠️ VLM not loaded. Falling back to DOM selector click.")
+            # A naive heuristic for DOM fallback:
+            return self.browser.click_selector(f"text={element_name}")
+
+        screenshot_path = f"/tmp/vlm_screenshot_{int(time.time())}.png"
+        res = self.browser.take_screenshot(screenshot_path)
+        if "error" in res:
+            return res
+
+        print(f"👁️  Asking VLM to find '{element_name}'...")
+        coords_str = self.vlm.find_element_coordinates(screenshot_path, element_name)
+        print(f"   VLM replied: {coords_str}")
+        
+        # Parse coordinates (assuming VLM returns e.g., "x: 100, y: 200" or similar)
+        # This is highly dependent on the VLM's output format.
+        # For robustness in this implementation, we attempt to parse integers.
+        import re
+        nums = re.findall(r'\d+', coords_str)
+        if len(nums) >= 2:
+            x, y = int(nums[0]), int(nums[1])
+            return self.browser.click_coordinates(x, y)
+        else:
+            return f"error: VLM could not find distinct coordinates for '{element_name}'. Reply: {coords_str}"
 
     # ── Helpers ───────────────────────────────────────────────────────────
 

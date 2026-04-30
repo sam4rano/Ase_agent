@@ -22,20 +22,29 @@ from config.settings import (
 _SYSTEM_PROMPT = """You are a command parser. The user speaks Yoruba or mixed Yoruba-English.
 Return ONLY a JSON array of command objects. No markdown, no explanation, just raw JSON.
 
+You may be given recent conversation and action history. Use this context if the user refers to previous actions (like "close it", "scroll down", etc).
+
 Each command object must have an "action" field. Supported actions:
 {"action":"open_app","target":"AppName"}
+{"action":"close_app","target":"AppName"}
 {"action":"open_website","url":"https://..."}
 {"action":"search_web","query":"search terms"}
 {"action":"search_files","query":"filename or keyword"}
 {"action":"type_text","text":"text to type"}
 {"action":"take_screenshot"}
+{"action":"visual_click","element_name":"name of button or link"}
+{"action":"done", "response":"Dynamic conversational Yorùbá response here"}
 {"action":"unknown","raw":"original text"}
+
+If you need to perform multiple steps to achieve the goal, output the first set of actions. The system will run them and give you the results in the context. If the goal is fully achieved, output [{"action":"done", "response":"(your dynamic conversational Yorùbá response explaining what was done)"}].
 
 If the user gives multiple instructions, return multiple objects in the array.
 
 Examples:
 "ṣi Chrome" → [{"action":"open_app","target":"Google Chrome"}]
 "lọ si youtube.com" → [{"action":"open_website","url":"https://youtube.com"}]
+"pa á rẹ" or "close it" → [{"action":"close_app","target":"AppName"}] (infer AppName from context)
+"tẹ play lori youtube" or "click play" → [{"action":"visual_click","element_name":"play button"}]
 "ṣi Chrome ki o si lọ si youtube" → [{"action":"open_app","target":"Google Chrome"},{"action":"open_website","url":"https://youtube.com"}]
 "wa fún mi nipa Fela Kuti" → [{"action":"search_web","query":"Fela Kuti"}]
 "ya aworan" → [{"action":"take_screenshot"}]
@@ -50,7 +59,7 @@ class CommandParser:
         self.installed_apps = self._get_installed_apps()
         print(f"✅ LLM ready — {len(self.installed_apps)} installed apps indexed")
 
-    def parse(self, stt_result: dict) -> list[dict]:
+    def parse(self, stt_result: dict, memory_context: str = "") -> list[dict]:
         """
         Convert an STT result dict into a list of command dicts.
         Each dict has at minimum {"action": str}.
@@ -58,7 +67,11 @@ class CommandParser:
         text = stt_result["text"]
         is_code_switched = stt_result.get("is_code_switched", False)
 
-        user_content = f"User said: {text}"
+        user_content = ""
+        if memory_context and memory_context != "No previous context.":
+            user_content += f"{memory_context}\n\n"
+
+        user_content += f"User said: {text}"
         if is_code_switched:
             user_content += "\n(Note: this is mixed Yoruba-English speech)"
 
@@ -136,11 +149,11 @@ class CommandParser:
         """
         action = cmd.get("action", "unknown")
 
-        if action not in ALLOWED_ACTIONS:
+        if action not in ALLOWED_ACTIONS and action != "done":
             print(f"⚠️  Blocked disallowed action: {action!r}")
             return {"action": "unknown", "raw": str(cmd)}
 
-        if action == "open_app" and "target" in cmd:
+        if action in ("open_app", "close_app") and "target" in cmd:
             cmd["target"] = self._fuzzy_match_app(cmd["target"])
 
         if action == "open_website" and "url" in cmd:

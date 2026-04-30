@@ -37,11 +37,14 @@ TTS_MODEL_ID = "facebook/mms-tts-yor"
 # ── Safety ─────────────────────────────────────────────────────────────────
 ALLOWED_ACTIONS = frozenset({
     "open_app",
+    "close_app",
     "open_website",
     "search_web",
     "search_files",
     "type_text",
     "take_screenshot",
+    "visual_click",
+    "done",
     "unknown",
 })
 

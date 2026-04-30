@@ -74,8 +74,14 @@ This will install:
 - `mlx-whisper` — Whisper STT on MLX
 - `sounddevice` — audio I/O
 - `numpy` — audio array math
-- `pyttsx3` — offline TTS
+- `openwakeword` — Continuous wake word listening
+- `playwright` & `qwen-vl-utils` — Browser automation & Visual Grounding
 - `huggingface_hub` — model downloading
+
+**Visual Grounding Setup:**
+```bash
+playwright install chromium
+```
 
 **Expected install time:** 2–5 minutes on a good connection.
 
@@ -156,15 +162,17 @@ python3 main.py
 **What you'll see:**
 ```
 ==================================================
-🇳🇬  Yoruba Mac Agent — M1 Optimized
+🇳🇬  Àṣẹ Agent — Yoruba + English Voice Control
 ==================================================
 🎚️  Calibrating noise floor, please stay quiet...
 ✅ Noise floor set to: 0.0143
+🎧 Initializing Wake Word Engine (openWakeWord)...
+✅ Wake Word Engine ready. (Placeholder 'hey_jarvis' loaded, roadmap: train 'Ẹ n lẹ Àṣẹ')
 🔊 Ẹ káàbọ̀. Mo ṣetan.
 
 ⌨️  Press ENTER to speak | Ctrl+C to quit
 
-[ ENTER to speak ]
+🟢 Listening for wake word (Say 'hey jarvis')...
 ```
 
 ---

@@ -35,23 +35,27 @@ See **[instruction.md](instruction.md)** for the deep-dive setup guide.
 
 ```mermaid
 graph TD;
-    A[Push-to-Talk ENTER] --> B[AudioRecorder VAD];
-    B --> C[LyngualLabs Yorùbá STT];
-    C --> D[Qwen2.5-1.5B LLM Parser];
-    D --> E[JSON Action Allowlist];
-    E --> F[MacExecutor AppleScript];
-    F --> G[MMS-TTS Yorùbá Response];
+    A[Continuous Wake Word Listening] --> B[LyngualLabs Yorùbá STT];
+    B --> C[Qwen2.5-1.5B LLM Parser];
+    C --> D[SQLite Memory Database];
+    D --> E[ReAct Execution Loop];
+    E --> F[MacExecutor / Playwright Browser];
+    F -->|Visual Grounding via VLM| E;
+    E --> G[MMS-TTS Dynamic Yorùbá Response];
 ```
 
 | Component | Model / Library |
 |---|---|
 | **STT Engine** | `LyngualLabs/whisper-small-yoruba` (Fine-tuned Whisper on HuggingFace) |
 | **Command Parser** | `mlx-community/Qwen2.5-1.5B-Instruct-4bit` (via MLX) |
-| **Audio Capture** | `sounddevice` with dynamic noise-floor calibration |
+| **Wake Word Engine** | `openWakeWord` (Continuous background listening) |
+| **Memory & State** | Built-in `sqlite3` for rolling contextual memory |
 | **System Control** | `osascript` (AppleScript) + secure `subprocess` allowlist |
+| **Browser Agent** | `Playwright` for automated headless/UI browser control |
+| **Vision Model (VLM)** | `Qwen/Qwen2-VL-2B-Instruct` for visual grounding coordinates |
 | **TTS Engine** | `facebook/mms-tts-yor` (VITS-based offline speech) + `afplay` |
 
-**Memory Footprint (M1 8GB):** The entire pipeline consumes roughly **~2GB of RAM**, leaving plenty of headroom for your actual macOS applications.
+**Memory Footprint (M1 8GB):** The baseline pipeline consumes roughly **~2GB of RAM**, scaling up if the massive VLM model is initialized for visual grounding.
 
 ---
 
@@ -66,7 +70,23 @@ Speak naturally in Yorùbá. The agent understands code-switching and complex mu
 | `wa Fela Kuti` | Performs a Google Search in your default browser |
 | `ya aworan` | Takes a screenshot and saves it to your Desktop |
 | `wa faili orin` | Opens Spotlight and searches for files matching "orin" |
+| `tẹ play lori youtube` | **Visual Click**: Takes a screenshot, locates the play button using the Vision Model, and clicks it |
+| `pa á rẹ` | **Contextual Memory**: Checks the database for the last opened app and forcefully closes it |
 | `ṣi Chrome ki o si lọ si github.com` | **Multi-action**: Opens Chrome, then navigates to GitHub |
+
+---
+
+## 🧩 Plug-and-Play Modularity
+
+Àṣẹ is built to be a hacker's playground. You can easily bring your own intelligence models! 
+Want to use a different Text-to-Speech model? A custom Wake Word? The architecture strictly separates concerns so you can swap out core components with just a configuration change.
+
+- **Bring Your Own STT**: Swap `LyngualLabs/whisper-small-yoruba` in `config/settings.py` for any HuggingFace ASR pipeline.
+- **Bring Your Own TTS**: Swap `facebook/mms-tts-yor` for Flow-Matching architectures like F5-TTS or XTTS simply by updating `src/tts_engine.py`.
+- **Bring Your Own LLM**: You can swap the Qwen parser for a local LLaMA-3 model by changing the ID in `config/settings.py` (just ensure you update the JSON system prompt formatting).
+- **Custom Wake Words**: Use `openWakeWord` to train a model for your own voice phrase and plug the ONNX file into `src/wake_word.py`.
+
+See **[contributors.md](contributors.md)** for a deep dive into swapping out these engines.
 
 ---
 

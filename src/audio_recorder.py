@@ -122,3 +122,32 @@ class AudioRecorder:
             print("⚠️  Audio clipped — try speaking a bit softer or moving back from mic")
 
         return audio, was_clipped
+
+    def listen_for_wake_word(self, wake_engine) -> bool:
+        """
+        Blocks and listens until the wake word is detected.
+        Returns True when detected.
+        """
+        print("🟢 Listening for wake word (Say 'hey jarvis')...")
+        # openwakeword processes 1280 samples (80ms at 16kHz) perfectly
+        chunk_size = int(self.sample_rate * 80 / 1000)
+        
+        try:
+            with sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="float32",
+                blocksize=chunk_size,
+            ) as stream:
+                while True:
+                    chunk, overflow = stream.read(chunk_size)
+                    if overflow:
+                        continue
+                    flat = chunk.flatten()
+                    
+                    if wake_engine.process_chunk(flat):
+                        print("🔔 Wake word detected!")
+                        return True
+        except Exception as e:
+            print(f"⚠️ Wake word listener error: {e}")
+            return False
