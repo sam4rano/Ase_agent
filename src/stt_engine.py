@@ -1,7 +1,7 @@
 """
 src/stt_engine.py
 
-NCAIR1/Yoruba-ASR STT Engine.
+LyngualLabs/whisper-small-yoruba STT Engine.
 Uses transformers to load the fine-tuned Yoruba Whisper model.
 """
 
@@ -38,7 +38,7 @@ class YorubaSTT:
         """
         Transcribe a float32 audio array.
         """
-        # NCAIR1 model expects 16kHz
+        # Whisper model expects 16kHz
         # audio_array is already 16kHz from AudioRecorder
         
         result = self.pipe(

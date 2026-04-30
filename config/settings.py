@@ -14,7 +14,7 @@ MIN_NOISE_FLOOR = 0.008      # safety floor for noise calibration
 NOISE_CALIBRATION_SECS = 1.5 # how long to listen before starting
 
 # ── STT ────────────────────────────────────────────────────────────────────
-WHISPER_MODEL_ID = "NCAIR1/Yoruba-ASR"
+WHISPER_MODEL_ID = "LyngualLabs/whisper-small-yoruba"
 WHISPER_PRIMARY_LANGUAGE = "yo"   # Fine-tuned model is Yoruba-first
 CONFIDENCE_THRESHOLD = 0.35       # Fine-tuned models often have different confidence scales
 

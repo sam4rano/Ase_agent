@@ -38,10 +38,10 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from transformers import pipeline, AutoTokenizer, VitsModel
 from mlx_lm import load
 
-print("  → Downloading NCAIR1/Yoruba-ASR (Fine-tuned Whisper)...")
+print("  → Downloading LyngualLabs/whisper-small-yoruba (Fine-tuned Whisper)...")
 try:
-    pipeline("automatic-speech-recognition", model="NCAIR1/Yoruba-ASR")
-    print("  ✅ NCAIR1/Yoruba-ASR ready")
+    pipeline("automatic-speech-recognition", model="LyngualLabs/whisper-small-yoruba")
+    print("  ✅ LyngualLabs/whisper-small-yoruba ready")
 except Exception as e:
     print(f"  ❌ Error downloading STT: {e}")
 
