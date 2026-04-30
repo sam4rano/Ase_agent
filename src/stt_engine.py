@@ -117,7 +117,15 @@ class YorubaSTT:
         segments = result.get("segments", [])
         if not segments:
             return 0.0
-        avg_logprob = float(np.mean([s.get("avg_logprob", -1.5) for s in segments]))
+        
+        # Whisper can sometimes omit avg_logprob or it evaluates to NaN
+        logprobs = [s.get("avg_logprob") for s in segments]
+        logprobs = [lp for lp in logprobs if lp is not None and not np.isnan(lp)]
+        
+        if not logprobs:
+            return 0.0
+            
+        avg_logprob = float(np.mean(logprobs))
         return float(np.clip(1.0 + avg_logprob / 1.5, 0.0, 1.0))
 
     def _detect_code_switching(self, text: str) -> bool:

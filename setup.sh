@@ -81,6 +81,12 @@ with wave.open(tmp, 'w') as wf:
 mlx_whisper.transcribe(tmp, path_or_hf_repo="mlx-community/whisper-small-mlx", language="yo")
 print("  ✅ whisper-small-mlx ready")
 
+print("  → Downloading facebook/mms-tts-yor (~145MB)...")
+from transformers import AutoTokenizer, VitsModel
+AutoTokenizer.from_pretrained("facebook/mms-tts-yor")
+VitsModel.from_pretrained("facebook/mms-tts-yor")
+print("  ✅ mms-tts-yor ready")
+
 print("  → Downloading Qwen2.5-1.5B-Instruct-4bit (~1GB)...")
 from mlx_lm import load
 model, tokenizer = load("mlx-community/Qwen2.5-1.5B-Instruct-4bit")

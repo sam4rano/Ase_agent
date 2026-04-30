@@ -32,11 +32,9 @@ INTER_COMMAND_DELAY = 0.3    # seconds between queued actions
 CHROME_OPEN_WAIT = 1.0       # seconds to wait for Chrome after open_app
 
 # ── TTS ────────────────────────────────────────────────────────────────────
-# Uses macOS 'say' command — sounds natural, not robotic.
-# Run: say -v ? | grep en_  to see available English voices.
-# Samantha is the clearest en_US voice and handles Yoruba diacritics better than others.
-TTS_VOICE = "Samantha"  # Change to e.g. "Daniel" (en_GB) or "Karen" (en_AU) if preferred
-TTS_RATE = 160           # Words per minute for the 'say' command
+# Meta MMS-TTS for native, high-quality offline Yoruba speech (approx 145MB)
+TTS_MODEL_ID = "facebook/mms-tts-yor"
+
 
 # ── Safety ─────────────────────────────────────────────────────────────────
 ALLOWED_ACTIONS = frozenset({

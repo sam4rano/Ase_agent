@@ -7,16 +7,20 @@ Run from the project root: python3 src/main.py
 
 import sys
 import os
-import subprocess
+
+# Suppress macOS MallocStackLogging spam from subprocess/AppleScript
+os.environ["MallocNanoZone"] = "0"
+os.environ["MallocStackLogging"] = "0"
 
 # Allow imports from project root (for config/)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from audio_recorder import AudioRecorder
 from stt_engine import YorubaSTT
+from tts_engine import YorubaTTS
 from command_parser import CommandParser
 from mac_executor import MacExecutor
-from config.settings import CONFIDENCE_THRESHOLD, TTS_VOICE, TTS_RATE
+from config.settings import CONFIDENCE_THRESHOLD
 
 
 class YorubaAgent:
@@ -27,33 +31,34 @@ class YorubaAgent:
 
         self.recorder = AudioRecorder()
         self.stt = YorubaSTT()
+        self.tts = YorubaTTS()
         self.parser = CommandParser()
         self.executor = MacExecutor()
 
     # ── TTS ───────────────────────────────────────────────────────────────
 
     def speak(self, text: str):
-        print(f"🔊 {text}")
-        # macOS 'say' sounds natural. Samantha handles English perfectly.
-        subprocess.run(["say", "-v", TTS_VOICE, "-r", str(TTS_RATE), text], check=False)
+        self.tts.speak(text)
 
-    # ── Result → spoken English ───────────────────────────────────────────
+    # ── Result → spoken Yoruba ───────────────────────────────────────────
 
-    def results_to_speech(self, results: list[str]) -> str:
-        """Map ok/warn/error/unknown prefixes to spoken English phrases."""
+    def results_to_yoruba(self, results: list[str]) -> str:
+        """Map ok/warn/error/unknown prefixes to spoken Yoruba phrases."""
         phrases = []
         for r in results:
             if r.startswith("ok:"):
-                detail = r[3:]
-                phrases.append(f"Done. {detail}")
+                # "I have done it"
+                phrases.append("Mo ti ṣe é")
             elif r.startswith("warn:"):
-                phrases.append("I tried but couldn't complete it fully.")
+                # "I tried but it didn't work completely"
+                phrases.append("Mo gbiyanju ṣugbọn ko ṣiṣẹ patapata")
             elif r.startswith("error:"):
-                detail = r[6:]
-                phrases.append(f"Error: {detail}")
+                # "There was an error"
+                phrases.append("Aṣiṣe kan wa")
             elif r.startswith("unknown:"):
-                phrases.append("I didn't understand that. Please try again.")
-        return ". ".join(phrases) if phrases else "Done."
+                # "I don't understand, please speak again"
+                phrases.append("Kò yé mi, jọwọ sọ lẹẹkansi")
+        return ". ".join(phrases) if phrases else "O ti ṣe"
 
     # ── Main loop ─────────────────────────────────────────────────────────
 
@@ -63,7 +68,7 @@ class YorubaAgent:
         print("=" * 52)
 
         self.recorder.calibrate_noise_floor()
-        self.speak("Welcome. I'm ready.")
+        self.speak("Ẹ káàbọ̀. Mo ṣetan.")
         print("\n⌨️  Press ENTER to speak | Ctrl+C to quit\n")
 
         consecutive_low_confidence = 0
@@ -76,11 +81,11 @@ class YorubaAgent:
                 audio, was_clipped = self.recorder.record_utterance()
 
                 if audio is None:
-                    self.speak("I didn't hear anything.")
+                    self.speak("Emi ko gbọ ohunkohun")
                     continue
 
                 if was_clipped:
-                    self.speak("Please speak a little softer.")
+                    self.speak("Jọwọ sọ diẹ jẹjẹ diẹ sii")
 
                 # 2. Transcribe
                 stt_result = self.stt.transcribe(audio)
@@ -89,7 +94,7 @@ class YorubaAgent:
                 language = stt_result.get("language", "?")
 
                 if not text:
-                    self.speak("I didn't catch that. Please try again.")
+                    self.speak("Emi ko gbọ rẹ. Jọwọ sọ lẹẹkansi.")
                     continue
 
                 # Show detected language + confidence in terminal
@@ -97,10 +102,10 @@ class YorubaAgent:
 
                 # 3. Confidence gate
                 if confidence < CONFIDENCE_THRESHOLD:
-                    self.speak("Please say that again, I couldn't hear you clearly.")
+                    self.speak("Jọwọ sọ lẹẹkansi, mi o gbọ o kedere")
                     consecutive_low_confidence += 1
                     if consecutive_low_confidence >= 3:
-                        self.speak("Is your microphone working correctly?")
+                        self.speak("Ṣe maikirofoonu ṣiṣẹ daradara?")
                         consecutive_low_confidence = 0
                     continue
 
@@ -109,7 +114,7 @@ class YorubaAgent:
                 # 4. Parse
                 commands = self.parser.parse(stt_result)
                 if not commands:
-                    self.speak("I didn't understand what you wanted.")
+                    self.speak("Emi ko ye ohun ti o fẹ")
                     continue
 
                 print(f"⚙️  {len(commands)} command(s): {commands}")
@@ -119,15 +124,15 @@ class YorubaAgent:
                 print(f"   results: {results}")
 
                 # 6. Respond
-                self.speak(self.results_to_speech(results))
+                self.speak(self.results_to_yoruba(results))
 
             except KeyboardInterrupt:
-                self.speak("Goodbye!")
+                self.speak("O dabọ")
                 print("\nBye! 👋")
                 break
             except Exception as e:
                 print(f"❌ Unexpected error: {e}")
-                self.speak("Something went wrong. Please try again.")
+                self.speak("Aṣiṣe kan wa")
 
 
 if __name__ == "__main__":
