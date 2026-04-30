@@ -29,21 +29,23 @@ Build a lightweight, offline-capable voice assistant that:
 ## 2. Architecture Overview
 
 ```
-[Push-to-Talk: ENTER key]
+[Wake Word OR Push-to-Talk: ENTER key]
          ↓
 [AudioRecorder]         — sounddevice, calibrated noise floor, VAD silence detection
          ↓
-[YorubaSTT]             — mlx-whisper (small), Yoruba-first with auto-detect fallback
+[YorubaSTT]             — LyngualLabs/whisper-small-yoruba via transformers
          ↓
-[confidence gate]       — < 45%: ask to repeat | < 55%: auto-detect fallback
+[confidence gate]       — < 35%: ask to repeat
          ↓
 [CommandParser]         — MLX Qwen2.5-1.5B-4bit, multi-action JSON, 4-layer fallback
          ↓
-[JSON validator]        — fuzzy app-name matching, URL sanitization
+[Memory Context]        — SQLite rolling window (last 3 interactions injected)
          ↓
-[MacExecutor]           — AppleScript + shell, result verification, error recovery
+[ReAct Loop]            — up to 3 steps: parse → execute → evaluate
          ↓
-[TTS response]          — pyttsx3, Yoruba phrases
+[MacExecutor / Playwright] — AppleScript + shell + browser automation
+         ↓
+[Dynamic TTS response]  — MMS-TTS Yoruba + LLM-generated response text
 ```
 
 ---
@@ -52,11 +54,15 @@ Build a lightweight, offline-capable voice assistant that:
 
 | Layer | Choice | Why |
 |---|---|---|
-| Speech-to-text | `mlx-whisper` (small) | Apple-native Metal GPU, ~0.5GB |
+| Speech-to-text | `LyngualLabs/whisper-small-yoruba` via `transformers` | Fine-tuned Yoruba accuracy, MPS backend |
 | LLM inference | `mlx-lm` + Qwen2.5-1.5B-4bit | ~1GB RAM, Apple Silicon optimized |
 | Audio I/O | `sounddevice` | Low-latency, numpy-native |
+| Wake word | `openWakeWord` | Lightweight, offline, ONNX |
 | Mac control | `osascript` (AppleScript) + `subprocess` | No extra deps |
-| TTS | `pyttsx3` | Offline, macOS native voices |
+| Browser control | `playwright` (Chromium) | Headless/UI, cross-platform |
+| Vision model | `Qwen2-VL-2B-Instruct` | Visual grounding for click coordinates |
+| TTS | `facebook/mms-tts-yor` (VITS) | Offline, native Yoruba voice |
+| Memory | `sqlite3` | Zero-dependency, auto-pruned |
 | Model download | `huggingface_hub` | Handles caching |
 
 **Memory budget (M1 Air 8GB):**
@@ -76,15 +82,22 @@ Total:                   ~4.3 GB  ✅  ~3.7 GB headroom
 ```
 ase_agent/
 ├── plan.md                  # This file
+├── forensic.md              # Engineering journey & roadmap
 ├── security.md              # Threat model + safe guards
 ├── instruction.md           # Setup + usage guide
 ├── README.md                # GitHub-facing summary
+├── contributors.md          # How to contribute & swap models
 │
 ├── src/
-│   ├── audio_recorder.py    # Noise-calibrated recording
+│   ├── audio_recorder.py    # Noise-calibrated recording + wake word listener
 │   ├── stt_engine.py        # Whisper STT + confidence gating
 │   ├── command_parser.py    # MLX LLM → JSON commands
-│   ├── mac_executor.py      # AppleScript executor + verifier
+│   ├── mac_executor.py      # AppleScript/Playwright executor + verifier
+│   ├── tts_engine.py        # MMS-TTS Yoruba speech output
+│   ├── memory.py            # SQLite rolling context window
+│   ├── wake_word.py         # openWakeWord continuous listener
+│   ├── browser_agent.py     # Playwright browser automation
+│   ├── vlm_engine.py        # Qwen2-VL visual grounding
 │   └── main.py              # Entry point — full agent loop
 │
 ├── config/
@@ -93,7 +106,8 @@ ase_agent/
 ├── tests/
 │   ├── test_audio.py        # Mic check, clipping detection
 │   ├── test_parser.py       # JSON extraction edge cases
-│   └── test_executor.py     # AppleScript dry-runs
+│   ├── test_executor.py     # AppleScript dry-runs
+│   └── test_memory.py       # SQLite memory operations
 │
 ├── requirements.txt         # Pinned Python dependencies
 └── setup.sh                 # One-command bootstrap

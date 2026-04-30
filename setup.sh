@@ -62,6 +62,10 @@ except Exception as e:
     print(f"  ❌ Error downloading LLM: {e}")
 PYEOF
 
+# --- 4b. Playwright Browser ---
+echo "🌐 Installing Playwright Chromium..."
+python3 -m playwright install chromium 2>/dev/null || echo "  ⚠️ Playwright install skipped (optional for visual grounding)"
+
 # --- 5. Done ---
 echo ""
 echo "════════════════════════════════════════"

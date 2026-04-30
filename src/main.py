@@ -1,12 +1,17 @@
 """
 src/main.py — Àṣẹ Agent entry point.
 
-Full loop: push-to-talk → STT → parse → execute → English TTS response.
+Full loop: wake-word/push-to-talk → STT → parse → execute → Yorùbá TTS response.
 Run from the project root: python3 src/main.py
+
+Options:
+  --no-vlm        Skip loading the Vision-Language Model (saves ~4GB RAM)
+  --no-wakeword   Disable wake word, use push-to-talk only
 """
 
 import sys
 import os
+import argparse
 
 # Suppress macOS MallocStackLogging spam from subprocess/AppleScript
 os.environ["MallocNanoZone"] = "0"
@@ -26,7 +31,7 @@ from config.settings import CONFIDENCE_THRESHOLD
 
 
 class YorubaAgent:
-    def __init__(self):
+    def __init__(self, use_vlm=True, use_wakeword=True):
         # Check Accessibility before loading heavy models
         if not MacExecutor.check_accessibility():
             sys.exit(1)
@@ -35,9 +40,12 @@ class YorubaAgent:
         self.stt = YorubaSTT()
         self.tts = YorubaTTS()
         self.parser = CommandParser()
-        self.executor = MacExecutor()
+        self.executor = MacExecutor(use_vlm=use_vlm)
         self.memory = AgentMemory()
-        self.wake_engine = WakeWordEngine()
+        self.wake_engine = WakeWordEngine() if use_wakeword else WakeWordEngine.__new__(WakeWordEngine)
+        if not use_wakeword:
+            self.wake_engine.is_ready = False
+            print("⚠️  Wake word disabled via --no-wakeword. Using push-to-talk.")
 
     # ── TTS ───────────────────────────────────────────────────────────────
 
@@ -120,15 +128,18 @@ class YorubaAgent:
                         consecutive_low_confidence = 0
                     continue
 
+                consecutive_low_confidence = 0
+
                 # 4. ReAct Loop
                 max_steps = 3
                 step = 0
                 all_results = []
                 final_response = None
+                current_stt = stt_result
                 
                 while step < max_steps:
                     context = self.memory.get_recent_context()
-                    commands = self.parser.parse(stt_result, memory_context=context)
+                    commands = self.parser.parse(current_stt, memory_context=context)
                     
                     if not commands:
                         if step == 0:
@@ -153,6 +164,14 @@ class YorubaAgent:
                     # Save to Memory
                     self.memory.add_interaction(text, commands, results)
                     
+                    # On subsequent steps, use a synthetic prompt so the LLM
+                    # focuses on context/results rather than re-interpreting
+                    # the original speech.
+                    current_stt = {
+                        "text": "Continue the previous task based on the results.",
+                        "is_code_switched": False,
+                    }
+                    
                     step += 1
 
                 # 6. Respond (Dynamic)
@@ -163,6 +182,7 @@ class YorubaAgent:
                     self.speak(self.results_to_yoruba(all_results))
 
             except KeyboardInterrupt:
+                self.executor.browser.stop()
                 self.speak("O dabọ")
                 print("\nBye! 👋")
                 break
@@ -172,4 +192,12 @@ class YorubaAgent:
 
 
 if __name__ == "__main__":
-    YorubaAgent().run()
+    arg_parser = argparse.ArgumentParser(description="Àṣẹ Agent — Yoruba Voice Assistant")
+    arg_parser.add_argument("--no-vlm", action="store_true", help="Skip loading VLM (saves ~4GB RAM)")
+    arg_parser.add_argument("--no-wakeword", action="store_true", help="Disable wake word, use push-to-talk")
+    args = arg_parser.parse_args()
+
+    YorubaAgent(
+        use_vlm=not args.no_vlm,
+        use_wakeword=not args.no_wakeword,
+    ).run()

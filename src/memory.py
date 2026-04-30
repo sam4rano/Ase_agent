@@ -36,6 +36,13 @@ class AgentMemory:
                 INSERT INTO interaction_log (user_input, parsed_commands, execution_results)
                 VALUES (?, ?, ?)
             ''', (user_input, json.dumps(parsed_commands), json.dumps(execution_results)))
+            # Prune old rows to keep only the last 100 interactions
+            cursor.execute('''
+                DELETE FROM interaction_log
+                WHERE id NOT IN (
+                    SELECT id FROM interaction_log ORDER BY id DESC LIMIT 100
+                )
+            ''')
             conn.commit()
 
     def get_recent_context(self, limit=3) -> str:
@@ -45,7 +52,7 @@ class AgentMemory:
             cursor.execute('''
                 SELECT user_input, parsed_commands, execution_results
                 FROM interaction_log
-                ORDER BY timestamp DESC
+                ORDER BY id DESC
                 LIMIT ?
             ''', (limit,))
             rows = cursor.fetchall()

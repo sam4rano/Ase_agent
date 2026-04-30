@@ -5,3 +5,6 @@ __pycache__/
 .DS_Store
 *.egg-info/
 .env
+memory.db
+test_memory.db
+*.wav

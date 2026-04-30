@@ -11,12 +11,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.mac_executor import MacExecutor
+# Patch heavy imports before loading MacExecutor
+with patch.dict("sys.modules", {
+    "browser_agent": MagicMock(),
+    "vlm_engine": MagicMock(),
+}):
+    from src.mac_executor import MacExecutor
 
 
 @pytest.fixture
 def executor():
-    return MacExecutor()
+    """MacExecutor with BrowserAgent + VLMEngine bypassed."""
+    with patch.object(MacExecutor, "__init__", lambda self: None):
+        e = MacExecutor.__new__(MacExecutor)
+        e.browser = MagicMock()
+        e.vlm = MagicMock()
+        e.vlm.is_ready = False
+    return e
 
 
 class TestExecuteOne:
@@ -71,38 +82,52 @@ class TestOpenApp:
         assert "not found" in result
 
 
-class TestOpenWebsite:
+class TestCloseApp:
 
-    def test_open_website_success(self, executor):
-        with patch.object(executor, "open_app", return_value="ok:Opened Google Chrome"), \
-             patch.object(executor, "_applescript", return_value=("", True)), \
-             patch("time.sleep"):
-            result = executor.open_website_in_chrome("https://example.com")
+    def test_close_app_success(self, executor):
+        with patch.object(executor, "_applescript", return_value=("", True)):
+            result = executor.close_app("Safari")
+        assert result.startswith("ok:")
+        assert "Closed Safari" in result
+
+    def test_close_app_fallback_killall(self, executor):
+        with patch.object(executor, "_applescript", return_value=("", False)), \
+             patch("subprocess.run", return_value=MagicMock(returncode=0)):
+            result = executor.close_app("Safari")
         assert result.startswith("ok:")
 
-    def test_open_website_fallback_on_applescript_fail(self, executor):
-        with patch.object(executor, "open_app", return_value="ok:Opened Google Chrome"), \
-             patch.object(executor, "_applescript", return_value=("", False)), \
-             patch("subprocess.run"), \
-             patch("time.sleep"):
-            result = executor.open_website_in_chrome("https://example.com")
-        assert result.startswith("ok:")
+    def test_close_app_failure(self, executor):
+        with patch.object(executor, "_applescript", return_value=("", False)), \
+             patch("subprocess.run", return_value=MagicMock(returncode=1)):
+            result = executor.close_app("GhostApp")
+        assert result.startswith("error:")
 
 
 class TestSearchWeb:
 
-    def test_search_web_encodes_query(self, executor):
-        captured_urls = []
+    def test_search_web_uses_browser_navigate(self, executor):
+        executor.browser.navigate.return_value = "ok: Navigated to https://www.google.com/search?q=Fela%20Kuti"
+        result = executor.search_web("Fela Kuti")
+        assert "ok:" in result
+        executor.browser.navigate.assert_called_once()
+        call_url = executor.browser.navigate.call_args[0][0]
+        assert "google.com/search" in call_url
 
-        def fake_open(url):
-            captured_urls.append(url)
-            return "ok:opened"
 
-        with patch.object(executor, "open_website_in_chrome", side_effect=fake_open):
-            executor.search_web("Fela Kuti music")
+class TestVisualClick:
 
-        assert "Fela+Kuti+music" in captured_urls[0] or "Fela%20Kuti" in captured_urls[0]
-        assert "google.com/search" in captured_urls[0]
+    def test_visual_click_no_browser(self, executor):
+        executor.browser.page = None
+        result = executor.visual_click("play button")
+        assert "error" in result
+
+    def test_visual_click_vlm_not_ready_falls_back_to_dom(self, executor):
+        executor.browser.page = MagicMock()
+        executor.vlm.is_ready = False
+        executor.browser.click_selector.return_value = "ok: Clicked selector 'text=play button'"
+        result = executor.visual_click("play button")
+        assert "ok:" in result
+        executor.browser.click_selector.assert_called_once()
 
 
 class TestExecuteQueue:

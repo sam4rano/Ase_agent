@@ -120,7 +120,7 @@ class CommandParser:
                 pass
 
         # Layer 3
-        arr = re.search(r"\[.*?\]", raw, re.DOTALL)
+        arr = re.search(r"\[.*\]", raw, re.DOTALL)
         if arr:
             try:
                 return json.loads(arr.group())
@@ -149,7 +149,7 @@ class CommandParser:
         """
         action = cmd.get("action", "unknown")
 
-        if action not in ALLOWED_ACTIONS and action != "done":
+        if action not in ALLOWED_ACTIONS:
             print(f"⚠️  Blocked disallowed action: {action!r}")
             return {"action": "unknown", "raw": str(cmd)}
 
@@ -158,6 +158,11 @@ class CommandParser:
 
         if action == "open_website" and "url" in cmd:
             url = cmd["url"]
+            # Block known dangerous schemes first
+            dangerous = ("javascript:", "data:", "file:", "ftp:", "blob:")
+            if any(url.lower().startswith(s) for s in dangerous):
+                print(f"⚠️  Blocked dangerous URL: {url!r}")
+                return {"action": "unknown", "raw": url}
             if not url.startswith(ALLOWED_URL_SCHEMES):
                 # Try to rescue a bare domain
                 if "://" not in url:
@@ -190,7 +195,7 @@ class CommandParser:
     def _fuzzy_match_app(self, requested: str) -> str:
         """
         Match LLM-returned app name against installed apps.
-        Priority: exact → partial containment → original (let executor error).
+        Priority: exact → partial containment (shortest wins) → original (let executor error).
         """
         req_lower = requested.lower()
 
@@ -199,10 +204,15 @@ class CommandParser:
             if app.lower() == req_lower:
                 return app
 
-        # Partial containment (either direction)
+        # Partial containment (either direction) — prefer shortest match
+        candidates = []
         for app in self.installed_apps:
             if req_lower in app.lower() or app.lower() in req_lower:
-                return app
+                candidates.append(app)
+
+        if candidates:
+            # Shortest name is most likely the canonical app (e.g., "Safari" over "Safari Technology Preview")
+            return min(candidates, key=len)
 
         print(f"⚠️  App '{requested}' not found in installed apps — trying anyway")
         return requested

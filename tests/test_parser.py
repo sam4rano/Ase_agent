@@ -14,6 +14,7 @@ from unittest.mock import patch, MagicMock
 # Patch heavy MLX imports — we're testing parsing logic, not the model
 with patch.dict("sys.modules", {
     "mlx_lm": MagicMock(),
+    "mlx_lm.sample_utils": MagicMock(),
     "mlx": MagicMock(),
 }):
     from src.command_parser import CommandParser

@@ -7,13 +7,15 @@
 
 ## 1. Threat Model
 
-The agent runs locally on your Mac. It has three powerful capabilities:
+The agent runs locally on your Mac. It has these powerful capabilities:
 
 | Capability | What it can do |
 |---|---|
-| AppleScript execution | Open apps, control UI, simulate keystrokes |
+| AppleScript execution | Open/close apps, control UI, simulate keystrokes |
 | `subprocess` calls | Run shell commands as the current user |
-| URL opening | Navigate any URL in Chrome |
+| Playwright browser | Navigate URLs, take screenshots, click page elements |
+| Wake word listening | Continuously monitor microphone for activation phrase |
+| SQLite memory | Store recent user commands, actions, and results |
 
 **Attacker profile we defend against:**
 - Malicious audio input (someone speaks a destructive command nearby)
@@ -90,8 +92,9 @@ subprocess.run(f"open -a {app_name}", shell=True)  # ← shell injection vector
 
 ```python
 ALLOWED_ACTIONS = {
-    "open_app", "open_website", "search_web",
-    "search_files", "type_text", "take_screenshot", "unknown"
+    "open_app", "close_app", "open_website", "search_web",
+    "search_files", "type_text", "take_screenshot",
+    "visual_click", "done", "unknown"
 }
 
 if action not in ALLOWED_ACTIONS:
@@ -102,14 +105,38 @@ if action not in ALLOWED_ACTIONS:
 
 ### 2.5 Ambient Audio Attack
 
-**Risk:** Someone in earshot says "ṣi terminal ki o si pa faili gbogbo" (*"open terminal and delete all files"*) while push-to-talk is held.
+**Risk:** Someone in earshot says "ṣi terminal ki o si pa faili gbogbo" (*"open terminal and delete all files"*) while the agent is listening.
 
 **Mitigation:**
-- Push-to-talk is **ENTER key only** — requires physical keyboard access
-- There is no wake-word or always-on recording; the mic is only active while the key is held
-- This is the strongest mitigation: the attack requires the attacker to be at the keyboard
+- **Push-to-talk mode (default fallback):** Requires physical ENTER key — attacker must be at the keyboard
+- **Wake word mode (openWakeWord):** The agent listens continuously but only activates on the wake phrase. Background speech is ignored unless it closely matches the wake word audio signature.
+- The allowlist prevents truly destructive actions regardless of input source — there is no `shell_command` or `delete_file` action.
 
-**Accepted risk:** Anyone at the keyboard can trigger any command. This is a personal assistant, not a shared-system agent.
+**Accepted risk:** In wake word mode, anyone in the room who knows the wake phrase can trigger commands. This is a personal assistant designed for single-user environments.
+
+---
+
+### 2.6 Memory Database — Data at Rest
+
+**Risk:** The SQLite `memory.db` stores recent user commands, parsed actions, and execution results in plaintext. If the disk is accessed by another user or process, this data is exposed.
+
+**Mitigation:**
+- The database is pruned to a maximum of 100 rows (oldest interactions are auto-deleted)
+- The file is created in the project root with standard user-only permissions
+- `memory.db` is listed in `.gitignore` to prevent accidental commits
+
+**Accepted risk:** The database is not encrypted. Full-disk encryption (FileVault) is recommended for sensitive environments.
+
+---
+
+### 2.7 Playwright Browser Agent
+
+**Risk:** The Playwright-controlled browser runs with full page access. A malicious page could attempt to phish or exploit the user.
+
+**Mitigation:**
+- URLs are validated by the same allowlist as before (HTTP/HTTPS only)
+- The browser runs in a separate Chromium instance, isolated from the user's main browser session and cookies
+- No credentials or cookies are shared with the user's primary Chrome profile
 
 ---
 
@@ -174,7 +201,7 @@ These are hardcoded exclusions, not configurable:
 
 - All executed commands are printed to stdout with a `⚙️` prefix
 - All errors are printed with a `⚠️` or `❌` prefix
-- No logs are written to disk by default (reduces attack surface of log files)
+- Recent interactions are stored in `memory.db` (SQLite, max 100 rows, auto-pruned)
 - To enable persistent logging, redirect stdout: `python main.py >> ase_agent.log 2>&1`
 
 ---

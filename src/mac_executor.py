@@ -7,6 +7,7 @@ All actions return a prefixed string: "ok:", "warn:", or "error:".
 
 import subprocess
 import time
+import re
 import urllib.parse
 import getpass
 import os
@@ -26,9 +27,16 @@ _USER = getpass.getuser()
 
 
 class MacExecutor:
-    def __init__(self):
+    def __init__(self, use_vlm=True):
         self.browser = BrowserAgent(headless=False)
-        self.vlm = VLMEngine()
+        if use_vlm:
+            self.vlm = VLMEngine()
+        else:
+            # Lightweight stub — avoids loading the heavy VLM
+            class _NoVLM:
+                is_ready = False
+            self.vlm = _NoVLM()
+            print("⚠️  VLM disabled via --no-vlm. Visual grounding will use DOM fallback.")
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -111,14 +119,10 @@ class MacExecutor:
             
         return f"error:Could not close {app_name}"
 
-    def open_website_in_chrome(self, url: str) -> str:
-        """(Deprecated) AppleScript navigation, now handled by browser_agent."""
-        pass
-
     def search_web(self, query: str) -> str:
-        """Google-search for query in Chrome."""
+        """Google-search for query via Playwright browser."""
         encoded = urllib.parse.quote(query)
-        return self.open_website_in_chrome(f"https://www.google.com/search?q={encoded}")
+        return self.browser.navigate(f"https://www.google.com/search?q={encoded}")
 
     def search_files(self, query: str) -> str:
         """Use mdfind (Spotlight CLI) and open Spotlight UI with the query."""
@@ -170,28 +174,31 @@ class MacExecutor:
         if not self.vlm.is_ready:
             # Fallback to DOM click if VLM isn't loaded (e.g., M1 constraints)
             print("⚠️ VLM not loaded. Falling back to DOM selector click.")
-            # A naive heuristic for DOM fallback:
             return self.browser.click_selector(f"text={element_name}")
 
-        screenshot_path = f"/tmp/vlm_screenshot_{int(time.time())}.png"
-        res = self.browser.take_screenshot(screenshot_path)
-        if "error" in res:
-            return res
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        screenshot_path = tmp.name
+        tmp.close()
 
-        print(f"👁️  Asking VLM to find '{element_name}'...")
-        coords_str = self.vlm.find_element_coordinates(screenshot_path, element_name)
-        print(f"   VLM replied: {coords_str}")
-        
-        # Parse coordinates (assuming VLM returns e.g., "x: 100, y: 200" or similar)
-        # This is highly dependent on the VLM's output format.
-        # For robustness in this implementation, we attempt to parse integers.
-        import re
-        nums = re.findall(r'\d+', coords_str)
-        if len(nums) >= 2:
-            x, y = int(nums[0]), int(nums[1])
-            return self.browser.click_coordinates(x, y)
-        else:
-            return f"error: VLM could not find distinct coordinates for '{element_name}'. Reply: {coords_str}"
+        try:
+            res = self.browser.take_screenshot(screenshot_path)
+            if "error" in res:
+                return res
+
+            print(f"👁️  Asking VLM to find '{element_name}'...")
+            coords_str = self.vlm.find_element_coordinates(screenshot_path, element_name)
+            print(f"   VLM replied: {coords_str}")
+
+            nums = re.findall(r'\d+', coords_str)
+            if len(nums) >= 2:
+                x, y = int(nums[0]), int(nums[1])
+                return self.browser.click_coordinates(x, y)
+            else:
+                return f"error: VLM could not find distinct coordinates for '{element_name}'. Reply: {coords_str}"
+        finally:
+            if os.path.exists(screenshot_path):
+                os.remove(screenshot_path)
 
     # ── Helpers ───────────────────────────────────────────────────────────
 

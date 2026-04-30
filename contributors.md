@@ -4,11 +4,16 @@ We welcome contributions! Àṣẹ is designed to be highly modular so researche
 
 ## 1. Project Structure
 
-- `config/settings.py`: The brain of the configuration. All model IDs and thresholds live here.
-- `src/stt_engine.py`: Handles Speech-to-Text (currently using HuggingFace pipelines).
-- `src/command_parser.py`: Handles the LLM parsing logic (currently using MLX).
-- `src/mac_executor.py`: Handles the execution of actions (AppleScript/subprocess).
-- `src/tts_engine.py`: Handles Text-to-Speech (currently using MMS-TTS).
+- `config/settings.py`: The brain of the configuration. All model IDs, thresholds, and the action allowlist live here.
+- `src/audio_recorder.py`: Handles audio recording with noise calibration and VAD (also wake-word listening).
+- `src/stt_engine.py`: Handles Speech-to-Text (currently using HuggingFace `LyngualLabs/whisper-small-yoruba`).
+- `src/command_parser.py`: Handles the LLM parsing logic (currently using MLX `Qwen2.5-1.5B`).
+- `src/mac_executor.py`: Handles the execution of actions (AppleScript/subprocess/Playwright).
+- `src/tts_engine.py`: Handles Text-to-Speech (currently using Meta MMS-TTS).
+- `src/memory.py`: SQLite-backed rolling context window for multi-turn awareness.
+- `src/wake_word.py`: Continuous background wake-word listening via `openWakeWord`.
+- `src/browser_agent.py`: Playwright-based browser automation for URL navigation and DOM interaction.
+- `src/vlm_engine.py`: Vision-Language Model engine for visual grounding (screenshot → coordinate → click).
 
 ## 2. How to Swap Models
 

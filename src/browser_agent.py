@@ -46,7 +46,7 @@ class BrowserAgent:
                 return "error: Browser could not start"
                 
         try:
-            self.page.goto(url, wait_until="networkidle", timeout=10000)
+            self.page.goto(url, wait_until="domcontentloaded", timeout=15000)
             return f"ok: Navigated to {url}"
         except PlaywrightTimeoutError:
             return f"warn: Navigated to {url} but page load timed out"
