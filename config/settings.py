@@ -30,8 +30,8 @@ INTER_COMMAND_DELAY = 0.3    # seconds between queued actions
 CHROME_OPEN_WAIT = 1.0       # seconds to wait for Chrome after open_app
 
 # ── TTS ────────────────────────────────────────────────────────────────────
-# Meta MMS-TTS for native, high-quality offline Yoruba speech (approx 145MB)
-TTS_MODEL_ID = "facebook/mms-tts-yor"
+# F5-TTS Zero-Shot Voice Cloning for ultra-realistic Yoruba speech (approx 1.35GB)
+TTS_MODEL_ID = "naijaml/f5-tts-yoruba"
 
 
 # ── Safety ─────────────────────────────────────────────────────────────────
