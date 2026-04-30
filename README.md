@@ -109,4 +109,6 @@ graph TD;
 
 ---
 
+## pip install -r requirements.txt 
+
 *Designed for M1/M2/M3 MacBooks. Requires macOS 13+.*

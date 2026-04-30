@@ -64,3 +64,16 @@ We performed a comprehensive audit of the system to identify and fix 20 critical
 6.  **Security Hardening**: Blocked dangerous URL schemes (`javascript:`, `data:`, etc.) and updated the threat model documentation.
 7.  **Resource Optimization**: Added `--no-vlm` and `--no-wakeword` CLI flags for users on constrained 8GB machines.
 8.  **Test Coverage**: Created a new test suite for the Memory module and expanded the Executor tests to mock heavy vision dependencies.
+
+---
+
+## 🧹 System Maintenance (April 30, 2026)
+
+In addition to code hardening, we performed a deep forensic cleanup of the host system to reclaim critical resources.
+
+### Results:
+*   **Disk Space Reclaimed**: **~80GB** total.
+*   **Docker Purge**: Removed **53GB** of stale data, including heavy images like `ollama/ollama` (8.6GB) and `langflow` (7.7GB).
+*   **Cache Cleanup**: Purged **11GB** of user caches, log files, and browser bloat.
+*   **Dependency Audit**: Uninstalled **100+ unused Python packages** (including the massive `pyobjc` suite and `pyttsx3`) to streamline the agent's runtime environment.
+*   **Memory Footprint**: The agent now runs in a lean virtual environment with verified production-only dependencies.
