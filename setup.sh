@@ -45,13 +45,12 @@ try:
 except Exception as e:
     print(f"  ❌ Error downloading STT: {e}")
 
-print("  → Downloading naijaml/f5-tts-yoruba (~1.35GB)...")
+print("  → Downloading facebook/mms-tts-yor (~145MB)...")
 try:
-    from huggingface_hub import hf_hub_download
-    hf_hub_download("naijaml/f5-tts-yoruba", "model_150000.pt")
-    hf_hub_download("naijaml/f5-tts-yoruba", "vocab.txt")
-    hf_hub_download("naijaml/f5-tts-yoruba", "samples/female_1_greeting.wav")
-    print("  ✅ f5-tts-yoruba ready")
+    from transformers import AutoTokenizer, VitsModel
+    AutoTokenizer.from_pretrained("facebook/mms-tts-yor")
+    VitsModel.from_pretrained("facebook/mms-tts-yor")
+    print("  ✅ mms-tts-yor ready")
 except Exception as e:
     print(f"  ❌ Error downloading TTS: {e}")
 

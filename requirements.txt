@@ -6,4 +6,4 @@ huggingface_hub>=0.22.0
 transformers>=4.40.0
 torch>=2.0.0
 accelerate>=0.26.0
-f5-tts>=1.1.20
+scipy>=1.11.0

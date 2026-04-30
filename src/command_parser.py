@@ -155,34 +155,6 @@ class CommandParser:
 
         return cmd
 
-    def restore_diacritics(self, text: str) -> str:
-        """
-        Use the LLM to add correct Yoruba diacritics to a text string.
-        Critical for high-quality TTS playback.
-        """
-        # Short-circuit if empty or purely English
-        if not text or not re.search(r'[a-zA-Z]', text):
-            return text
-
-        # System prompt for restoration
-        restore_prompt = "You are a Yoruba language expert. Your task is to add correct diacritics (tone marks and underdots) to Yoruba text that lacks them. Return ONLY the corrected text, no explanation."
-        
-        messages = [
-            {"role": "system", "content": restore_prompt},
-            {"role": "user", "content": f"Add diacritics to: {text}"},
-        ]
-        prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        corrected = generate(
-            self.model,
-            self.tokenizer,
-            prompt=prompt,
-            max_tokens=len(text) * 2,
-            sampler=make_sampler(temp=0.0), # Greedy for precision
-        ).strip()
-        
-        return corrected
 
     # ── App name fuzzy matching ───────────────────────────────────────────
 

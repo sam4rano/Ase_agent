@@ -1,57 +1,48 @@
 """
 src/tts_engine.py
 
-Native Yoruba TTS using F5-TTS Zero-Shot Voice Cloning model.
-Provides the most natural-sounding offline Yoruba voice with full tonal diacritic support.
+Native Yoruba TTS using Meta's Massively Multilingual Speech (MMS) model.
+Provides natural-sounding offline Yoruba voice.
 Playback via macOS native 'afplay'.
 """
 
+import torch
 import os
 import subprocess
-from huggingface_hub import hf_hub_download
-
-# CRITICAL: Must bypass pinyin conversion BEFORE any other F5-TTS import
-import f5_tts.model.utils as f5_utils
-f5_utils.convert_char_to_pinyin = lambda texts, polyphone=True: texts
-
-from f5_tts.api import F5TTS
+import tempfile
+import scipy.io.wavfile as wavfile
+from transformers import VitsModel, AutoTokenizer
+from config.settings import TTS_MODEL_ID
 
 class YorubaTTS:
-    def __init__(self):
-        print("🔊 Downloading/Loading F5-TTS Yoruba model (~1.35GB)...")
-        self.ckpt = hf_hub_download("naijaml/f5-tts-yoruba", "model_150000.pt")
-        self.vocab = hf_hub_download("naijaml/f5-tts-yoruba", "vocab.txt")
-        self.ref_wav = hf_hub_download("naijaml/f5-tts-yoruba", "samples/female_1_greeting.wav")
-        self.ref_text = "ẹ kú àárọ̀, báwo ni àwọn ọmọ yín ṣe wà?"
-        
-        self.f5tts = F5TTS(
-            model="F5TTS_v1_Base",
-            ckpt_file=self.ckpt,
-            vocab_file=self.vocab,
-            device="mps", # Optimized for Apple Silicon
-        )
-        print("✅ F5-TTS ready")
+    def __init__(self, model_id: str = TTS_MODEL_ID):
+        print(f"🔊 Loading Yoruba TTS ({model_id.split('/')[-1]})...")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.model = VitsModel.from_pretrained(model_id)
+        self.sample_rate = self.model.config.sampling_rate
+        print("✅ TTS ready")
 
     def speak(self, text: str):
-        """Generate and play Yoruba speech via F5-TTS and afplay."""
+        """Generate and play Yoruba speech via afplay."""
         print(f"🔊 {text}")
         
-        output_wav = "f5_tts_output.wav"
+        inputs = self.tokenizer(text, return_tensors="pt")
         
-        try:
-            wav, sr, _ = self.f5tts.infer(
-                ref_file=self.ref_wav,
-                ref_text=self.ref_text,
-                gen_text=text,
-                speed=1.0,
-                nfe_step=16,
-                file_wave=output_wav,
-            )
+        with torch.no_grad():
+            output = self.model(**inputs).waveform
             
-            # Play audio using macOS native afplay
-            subprocess.run(["afplay", output_wav], check=True)
+        audio = output.numpy().flatten()
+        
+        # Save to temp file for afplay
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+            wavfile.write(tmp_path, self.sample_rate, audio)
+            
+        try:
+            # afplay is a built-in macOS command for audio playback
+            subprocess.run(["afplay", tmp_path], check=True)
         except Exception as e:
             print(f"⚠️  Playback error: {e}")
         finally:
-            if os.path.exists(output_wav):
-                os.remove(output_wav)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
