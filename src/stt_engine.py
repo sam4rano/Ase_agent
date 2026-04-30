@@ -7,9 +7,6 @@ Uses transformers to load the fine-tuned Yoruba Whisper model.
 
 import torch
 import numpy as np
-import tempfile
-import wave
-import os
 import re
 from transformers import pipeline
 
