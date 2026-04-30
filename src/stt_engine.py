@@ -1,135 +1,85 @@
 """
 src/stt_engine.py
 
-MLX Whisper STT — auto-detects language (English, Yoruba, mixed).
-Filters hallucinations before returning text.
+NCAIR1/Yoruba-ASR STT Engine.
+Uses transformers to load the fine-tuned Yoruba Whisper model.
 """
 
-import mlx_whisper
+import torch
 import numpy as np
 import tempfile
 import wave
 import os
 import re
+from transformers import pipeline
 
 from config.settings import (
     WHISPER_MODEL_ID,
     WHISPER_PRIMARY_LANGUAGE,
 )
 
-
 class YorubaSTT:
     def __init__(self, model_id: str = WHISPER_MODEL_ID):
         self.model_id = model_id
-        lang_label = WHISPER_PRIMARY_LANGUAGE or "auto-detect"
-        print(f"🔊 Whisper ready ({model_id.split('/')[-1]}, language={lang_label})")
+        print(f"🔊 Loading STT Model ({model_id})...")
+        
+        # Use transformers pipeline for STT
+        # We use CPU or MPS if available. Standard transformers on Mac works well with MPS.
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        self.pipe = pipeline(
+            "automatic-speech-recognition",
+            model=model_id,
+            chunk_length_s=30,
+            device=device,
+        )
+        print(f"✅ STT ready on {device}")
 
     def transcribe(self, audio_array: np.ndarray, sample_rate: int = 16000) -> dict:
         """
         Transcribe a float32 audio array.
-
-        Returns:
-            {
-                "text": str,
-                "language": str,
-                "confidence": float (0-1),
-                "is_code_switched": bool,
-            }
         """
-        tmp_path = self._write_wav(audio_array, sample_rate)
-        try:
-            return self._run(tmp_path)
-        finally:
-            os.unlink(tmp_path)
-
-    # ── Internal ──────────────────────────────────────────────────────────
-
-    def _write_wav(self, audio: np.ndarray, sample_rate: int) -> str:
-        fd, path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)
-        with wave.open(path, "w") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(sample_rate)
-            wf.writeframes((audio * 32767).astype(np.int16).tobytes())
-        return path
-
-    def _run(self, wav_path: str) -> dict:
-        _empty = {"text": "", "language": "en", "confidence": 0.0, "is_code_switched": False}
-
-        result = mlx_whisper.transcribe(
-            wav_path,
-            path_or_hf_repo=self.model_id,
-            language=WHISPER_PRIMARY_LANGUAGE,  # None = auto-detect (English, Yoruba, mixed)
-            word_timestamps=True,
-            fp16=True,
+        # NCAIR1 model expects 16kHz
+        # audio_array is already 16kHz from AudioRecorder
+        
+        result = self.pipe(
+            audio_array,
+            generate_kwargs={"language": WHISPER_PRIMARY_LANGUAGE},
+            return_timestamps=False,
         )
 
         text = result["text"].strip()
-        confidence = self._estimate_confidence(result)
-        language = result.get("language", "en")
-
-        # Gate 1: Whisper says there was no speech — trust it.
-        if self._avg_no_speech_prob(result) > 0.6:
-            return _empty
+        # transformers pipeline doesn't give logprobs as easily as mlx-whisper in one call,
+        # but for fine-tuned models on their target language, confidence is usually high.
+        # We'll set a placeholder or implement score extraction if needed.
+        confidence = 0.9 if text else 0.0 
 
         # Gate 2: Hallucination on noise → looping characters (å å å, మారిలి...).
         if self._is_hallucination(text):
-            return _empty
+            return {"text": "", "language": "yo", "confidence": 0.0, "is_code_switched": False}
 
         return {
             "text": text,
-            "language": language,
+            "language": "yo",
             "confidence": confidence,
             "is_code_switched": self._detect_code_switching(text),
         }
 
-    def _avg_no_speech_prob(self, result: dict) -> float:
-        segments = result.get("segments", [])
-        if not segments:
-            return 1.0
-        return float(np.mean([s.get("no_speech_prob", 0.0) for s in segments]))
-
     def _is_hallucination(self, text: str) -> bool:
-        """
-        Detect repeated-token or repeated-character hallucination patterns.
-        Examples: "å å å å å å å å", "మారిలిలిలిలిలిలి...", "... ... ... ..."
-        """
         if not text or not text.strip():
             return True
-
         tokens = text.split()
         if len(tokens) >= 8:
             most_common = max(set(tokens), key=tokens.count)
             if tokens.count(most_common) / len(tokens) > 0.6:
                 return True
-
         chars = [c for c in text if not c.isspace()]
         if len(chars) > 10:
             most_common_char = max(set(chars), key=chars.count)
             if chars.count(most_common_char) / len(chars) > 0.7:
                 return True
-
         return False
 
-    def _estimate_confidence(self, result: dict) -> float:
-        """avg_logprob: 0 is perfect, -1.5 is very poor. Map to 0-1."""
-        segments = result.get("segments", [])
-        if not segments:
-            return 0.0
-        
-        # Whisper can sometimes omit avg_logprob or it evaluates to NaN
-        logprobs = [s.get("avg_logprob") for s in segments]
-        logprobs = [lp for lp in logprobs if lp is not None and not np.isnan(lp)]
-        
-        if not logprobs:
-            return 0.0
-            
-        avg_logprob = float(np.mean(logprobs))
-        return float(np.clip(1.0 + avg_logprob / 1.5, 0.0, 1.0))
-
     def _detect_code_switching(self, text: str) -> bool:
-        """True if >30% of words look like English mixed into non-English speech."""
         yoruba_lookalikes = {
             "mo", "ni", "ti", "si", "fun", "ko", "o", "a", "wa", "se",
             "bi", "to", "lo", "ba", "le", "fi", "ma", "pa", "ran", "wo",

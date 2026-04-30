@@ -3,10 +3,14 @@ src/tts_engine.py
 
 Native Yoruba TTS using Meta's Massively Multilingual Speech (MMS) model.
 Provides natural-sounding offline Yoruba voice.
+Playback via macOS native 'afplay'.
 """
 
 import torch
-import sounddevice as sd
+import os
+import subprocess
+import tempfile
+import scipy.io.wavfile as wavfile
 from transformers import VitsModel, AutoTokenizer
 from config.settings import TTS_MODEL_ID
 
@@ -19,16 +23,26 @@ class YorubaTTS:
         print("✅ TTS ready")
 
     def speak(self, text: str):
-        """Generate and play Yoruba speech synchronously."""
+        """Generate and play Yoruba speech via afplay."""
         print(f"🔊 {text}")
         
-        # The model is sensitive to English punctuation, clean it up slightly if needed,
-        # but basic punctuation is fine.
         inputs = self.tokenizer(text, return_tensors="pt")
         
         with torch.no_grad():
             output = self.model(**inputs).waveform
             
         audio = output.numpy().flatten()
-        sd.play(audio, samplerate=self.sample_rate)
-        sd.wait()
+        
+        # Save to temp file for afplay
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+            wavfile.write(tmp_path, self.sample_rate, audio)
+            
+        try:
+            # afplay is a built-in macOS command for audio playback
+            subprocess.run(["afplay", tmp_path], check=True)
+        except Exception as e:
+            print(f"⚠️  Playback error: {e}")
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)

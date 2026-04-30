@@ -37,7 +37,9 @@ class YorubaAgent:
 
     # ── TTS ───────────────────────────────────────────────────────────────
 
-    def speak(self, text: str):
+    def speak(self, text: str, restore: bool = False):
+        if restore:
+            text = self.parser.restore_diacritics(text)
         self.tts.speak(text)
 
     # ── Result → spoken Yoruba ───────────────────────────────────────────
@@ -124,7 +126,8 @@ class YorubaAgent:
                 print(f"   results: {results}")
 
                 # 6. Respond
-                self.speak(self.results_to_yoruba(results))
+                # For generated responses, we apply diacritics restoration to ensure quality
+                self.speak(self.results_to_yoruba(results), restore=True)
 
             except KeyboardInterrupt:
                 self.speak("O dabọ")
