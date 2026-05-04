@@ -102,7 +102,10 @@ class YorubaAgent:
 
         self.recorder.calibrate_noise_floor()
         self.speak("Ẹ káàbọ̀. Mo ṣetan.")
-        print("\n⌨️  Press ENTER to speak | Ctrl+C to quit\n")
+        if self.wake_engine.is_ready:
+            print("\n🎤 Say 'hey jarvis' to wake me up | Ctrl+C to quit\n")
+        else:
+            print("\n⌨️  Press ENTER to speak | Ctrl+C to quit\n")
 
         consecutive_low_confidence = 0
 
@@ -151,12 +154,13 @@ class YorubaAgent:
 
                 consecutive_low_confidence = 0
 
-                # 4. ReAct Loop
-                max_steps = 3
+                # 4. Single-pass Execution
+                max_steps = 1
                 step = 0
                 all_results = []
                 final_response = None
                 current_stt = stt_result
+                previous_commands = None
                 
                 while step < max_steps:
                     context = self.memory.get_recent_context()
@@ -184,6 +188,12 @@ class YorubaAgent:
 
                     # Save to Memory
                     self.memory.add_interaction(text, commands, results)
+                    
+                    # Prevent infinite retry loops
+                    if commands == previous_commands and any(r.startswith("error:") for r in results):
+                        print("⚠️  Action failed again — aborting retry loop.")
+                        break
+                    previous_commands = commands
                     
                     # On subsequent steps, use a synthetic prompt so the LLM
                     # focuses on context/results rather than re-interpreting

@@ -15,7 +15,7 @@ except ImportError:
     Model = None
 
 class WakeWordEngine:
-    def __init__(self, threshold=0.5):
+    def __init__(self, threshold=0.3):
         self.threshold = threshold
         self.is_ready = False
         

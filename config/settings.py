@@ -20,8 +20,8 @@ CONFIDENCE_THRESHOLD = 0.35       # Fine-tuned models often have different confi
 
 # ── LLM ────────────────────────────────────────────────────────────────────
 LLM_MODEL_ID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
-LLM_MAX_TOKENS = 150          # JSON command arrays are small; 150 is plenty and cuts latency
-LLM_TEMPERATURE = 0.1        # near-deterministic for command parsing
+LLM_MAX_TOKENS = 64          # JSON command arrays are small; 64 is plenty and cuts latency
+LLM_TEMPERATURE = 0.0        # fully deterministic for command parsing
 
 # ── Executor ───────────────────────────────────────────────────────────────
 APP_VERIFY_TIMEOUT = 3.0     # seconds to wait for app to confirm open

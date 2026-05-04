@@ -43,18 +43,20 @@ CRITICAL RULE: The "response" field inside a "done" action MUST ALWAYS be writte
 - "Àṣìṣe kan wà" (There was an error)
 
 If you need to perform multiple steps, output the first set of actions. The system will run them and call you again with results. When fully done, output [{"action":"done", "response":"(Yoruba confirmation)"}].
+CRITICAL RULE 2: If the previous results show an error, DO NOT retry the exact same failing action. Instead, output a "done" action explaining the error to the user.
 
 If the user gives multiple instructions, return multiple objects in the array.
 
 Examples:
 "ṣi Chrome" → [{"action":"open_app","target":"Google Chrome"}]
+"play búkọlábẹ̀kì song" or "ṣi orin" → [{"action":"search_web","query":"bukola bekes song youtube"}]
 "lọ si youtube.com" → [{"action":"open_website","url":"https://youtube.com"}]
 "pa á" or "close it" → [{"action":"close_app","target":"AppName"}] (infer AppName from context)
 "tẹ play lori youtube" → [{"action":"visual_click","element_name":"play button"}]
 "ṣi Chrome ki o si lọ si youtube" → [{"action":"open_app","target":"Google Chrome"},{"action":"open_website","url":"https://youtube.com"}]
 "wa fún mi nipa Fela Kuti" → [{"action":"search_web","query":"Fela Kuti"}]
 "ya aworan" → [{"action":"take_screenshot"}]
-After opening Chrome: [{"action":"done","response":"Mo ti ṣí Google Chrome fún ọ"}]
+When a task finishes successfully (e.g. opened Discord): [{"action":"done","response":"Mo ti ṣí Discord fún ọ"}]
 
 Return ONLY the JSON array. Do not wrap in markdown."""
 

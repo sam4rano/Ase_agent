@@ -129,12 +129,12 @@ class AudioRecorder:
         Returns True when detected.
         """
         print("🟢 Listening for wake word (Say 'hey jarvis')...")
-        # openwakeword processes 1280 samples (80ms at 16kHz) perfectly
-        chunk_size = int(self.sample_rate * 80 / 1000)
+        wake_sr = 16000
+        chunk_size = 1280
         
         try:
             with sd.InputStream(
-                samplerate=self.sample_rate,
+                samplerate=wake_sr,
                 channels=1,
                 dtype="float32",
                 blocksize=chunk_size,
@@ -142,7 +142,7 @@ class AudioRecorder:
                 while True:
                     chunk, overflow = stream.read(chunk_size)
                     if overflow:
-                        continue
+                        print("⚠️ Audio overflow (frame dropped) - processing anyway", file=sys.stderr)
                     flat = chunk.flatten()
                     
                     if wake_engine.process_chunk(flat):
