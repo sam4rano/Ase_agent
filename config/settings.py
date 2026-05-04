@@ -20,7 +20,7 @@ CONFIDENCE_THRESHOLD = 0.35       # Fine-tuned models often have different confi
 
 # ── LLM ────────────────────────────────────────────────────────────────────
 LLM_MODEL_ID = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
-LLM_MAX_TOKENS = 300
+LLM_MAX_TOKENS = 150          # JSON command arrays are small; 150 is plenty and cuts latency
 LLM_TEMPERATURE = 0.1        # near-deterministic for command parsing
 
 # ── Executor ───────────────────────────────────────────────────────────────

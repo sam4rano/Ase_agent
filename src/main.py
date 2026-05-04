@@ -12,6 +12,8 @@ Options:
 import sys
 import os
 import argparse
+import re
+import threading
 
 # Suppress macOS MallocStackLogging spam from subprocess/AppleScript
 os.environ["MallocNanoZone"] = "0"
@@ -49,8 +51,13 @@ class YorubaAgent:
 
     # ── TTS ───────────────────────────────────────────────────────────────
 
-    def speak(self, text: str):
-        self.tts.speak(text)
+    def speak(self, text: str, blocking: bool = False):
+        """Speak text. Non-blocking by default (daemon thread) for snappier UX."""
+        if blocking:
+            self.tts.speak(text)
+        else:
+            t = threading.Thread(target=self.tts.speak, args=(text,), daemon=True)
+            t.start()
 
     # ── Result → spoken Yoruba ───────────────────────────────────────────
 
@@ -71,6 +78,20 @@ class YorubaAgent:
                 # "I don't understand, please speak again"
                 phrases.append("Kò yé mi, jọwọ sọ lẹẹkansi")
         return ". ".join(phrases) if phrases else "O ti ṣe"
+
+    # ── Language guard ────────────────────────────────────────────────────
+
+    _ENGLISH_WORDS = re.compile(
+        r"\b(the|has|been|have|was|is|are|opened|closed|done|successfully|"
+        r"I|you|it|for|and|or|not|no|yes|please|already|found|started|"
+        r"could|would|should|cannot|error|sorry|just|now|your|with)\b",
+        re.IGNORECASE,
+    )
+
+    def _is_english(self, text: str) -> bool:
+        """Return True if 3+ distinct common English words are detected."""
+        matches = {m.group().lower() for m in self._ENGLISH_WORDS.finditer(text)}
+        return len(matches) >= 3
 
     # ── Main loop ─────────────────────────────────────────────────────────
 
@@ -177,13 +198,18 @@ class YorubaAgent:
                 # 6. Respond (Dynamic)
                 if final_response:
                     print(f"🗣️  Dynamic Response: {final_response}")
-                    self.speak(final_response)
+                    if self._is_english(final_response):
+                        # LLM slipped into English — override with Yoruba
+                        print("⚠️  Response detected as English — using Yoruba fallback")
+                        self.speak(self.results_to_yoruba(all_results))
+                    else:
+                        self.speak(final_response)
                 else:
                     self.speak(self.results_to_yoruba(all_results))
 
             except KeyboardInterrupt:
                 self.executor.browser.stop()
-                self.speak("O dabọ")
+                self.speak("O dabọ", blocking=True)  # blocking so farewell plays before exit
                 print("\nBye! 👋")
                 break
             except Exception as e:
