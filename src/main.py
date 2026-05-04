@@ -93,6 +93,38 @@ class YorubaAgent:
         matches = {m.group().lower() for m in self._ENGLISH_WORDS.finditer(text)}
         return len(matches) >= 3
 
+    # ── Transparent ReAct (Thinking Out Loud) ─────────────────────────────
+    
+    def _speak_intermediate_thought(self, commands: list[dict]):
+        """Speak a quick intermediate thought based on the first action to keep UX alive."""
+        if not commands:
+            return
+            
+        action = commands[0].get("action")
+        target = commands[0].get("target", "")
+        url = commands[0].get("url", "")
+        query = commands[0].get("query", "")
+        
+        phrase = ""
+        if action == "open_app":
+            phrase = f"Mo ń ṣí {target}..."
+        elif action == "open_website":
+            domain = url.split("://")[-1].split("/")[0]
+            phrase = f"Mo ń lọ sí {domain}..."
+        elif action == "search_web":
+            phrase = f"Mo ń wá {query} lórí ayelujara..."
+        elif action == "search_files":
+            phrase = f"Mo ń wá fáìlì..."
+        elif action == "type_text":
+            phrase = "Mo ń tẹ àwọn ọ̀rọ̀..."
+        elif action == "take_screenshot":
+            phrase = "Mo ń ya àwòrán..."
+        elif action == "visual_click":
+            phrase = "Mo ń wo ojú iwe naa..."
+            
+        if phrase:
+            self.speak(phrase, blocking=False)
+
     # ── Main loop ─────────────────────────────────────────────────────────
 
     def run(self):
@@ -154,8 +186,8 @@ class YorubaAgent:
 
                 consecutive_low_confidence = 0
 
-                # 4. Single-pass Execution
-                max_steps = 1
+                # 4. Transparent ReAct Loop
+                max_steps = 3
                 step = 0
                 all_results = []
                 final_response = None
@@ -180,6 +212,9 @@ class YorubaAgent:
                     commands = [cmd for cmd in commands if cmd.get("action") != "done"]
                     if not commands:
                         break
+
+                    # Speak intermediate thought to prevent UX freeze
+                    self._speak_intermediate_thought(commands)
 
                     # 5. Execute
                     results = self.executor.execute_queue(commands)

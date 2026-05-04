@@ -42,20 +42,19 @@ CRITICAL RULE: The "response" field inside a "done" action MUST ALWAYS be writte
 - "Mo ti ya àwòrán fún ọ" (I have taken a screenshot for you)
 - "Àṣìṣe kan wà" (There was an error)
 
-If you need to perform multiple steps, output the first set of actions. The system will run them and call you again with results. When fully done, output [{"action":"done", "response":"(Yoruba confirmation)"}].
+If the user gives multiple instructions, return ALL actions in execution order in one JSON array.
 CRITICAL RULE 2: If the previous results show an error, DO NOT retry the exact same failing action. Instead, output a "done" action explaining the error to the user.
-
-If the user gives multiple instructions, return multiple objects in the array.
 
 Examples:
 "ṣi Chrome" → [{"action":"open_app","target":"Google Chrome"}]
 "play búkọlábẹ̀kì song" or "ṣi orin" → [{"action":"search_web","query":"bukola bekes song youtube"}]
-"lọ si youtube.com" → [{"action":"open_website","url":"https://youtube.com"}]
+"lọ sí Chrome, lọ sí YouTube, play Bukola Bekes" → [
+ {"action":"open_app","target":"Google Chrome"},
+ {"action":"open_website","url":"https://youtube.com"},
+ {"action":"search_web","query":"Bukola Bekes youtube"}
+]
 "pa á" or "close it" → [{"action":"close_app","target":"AppName"}] (infer AppName from context)
 "tẹ play lori youtube" → [{"action":"visual_click","element_name":"play button"}]
-"ṣi Chrome ki o si lọ si youtube" → [{"action":"open_app","target":"Google Chrome"},{"action":"open_website","url":"https://youtube.com"}]
-"wa fún mi nipa Fela Kuti" → [{"action":"search_web","query":"Fela Kuti"}]
-"ya aworan" → [{"action":"take_screenshot"}]
 When a task finishes successfully (e.g. opened Discord): [{"action":"done","response":"Mo ti ṣí Discord fún ọ"}]
 
 Return ONLY the JSON array. Do not wrap in markdown."""
@@ -68,13 +67,44 @@ class CommandParser:
         self.installed_apps = self._get_installed_apps()
         print(f"✅ LLM ready — {len(self.installed_apps)} installed apps indexed")
 
+    def _normalize_transcript(self, text: str) -> str:
+        """Fix common STT transcription errors for proper nouns."""
+        replacements = {
+            "bokojla": "bukola",
+            "package": "bekes",
+            "búkọlábẹ̀kì": "bukola bekes",
+        }
+        text_lower = text.lower()
+        for wrong, correct in replacements.items():
+            text_lower = text_lower.replace(wrong, correct)
+        return text_lower
+
     def parse(self, stt_result: dict, memory_context: str = "") -> list[dict]:
         """
         Convert an STT result dict into a list of command dicts.
         Each dict has at minimum {"action": str}.
         """
-        text = stt_result["text"]
+        text = self._normalize_transcript(stt_result["text"])
         is_code_switched = stt_result.get("is_code_switched", False)
+
+        # ── FAST BRAIN (Regex/Intent Classifier) ───────────────────────────
+        # For simple, rigid commands, bypass the LLM entirely for instant speed.
+        text_lower = text.lower().strip()
+        
+        if text_lower in ["stop", "da duro", "fagile", "cancel"]:
+            return [{"action": "done", "response": "Mo ti da duro"}]
+            
+        if text_lower in ["what is the time", "kini aago", "sọ aago fun mi", "time"]:
+            from datetime import datetime
+            current_time = datetime.now().strftime("%I:%M %p")
+            return [{"action": "done", "response": f"Aago jẹ {current_time}"}]
+            
+        # Fast Open App (e.g. "ṣi safari", "open notes") - strictly short phrases
+        if len(text_lower.split()) <= 3 and (text_lower.startswith("ṣi ") or text_lower.startswith("open ")):
+            app_name = text_lower.split(" ", 1)[1]
+            return [{"action": "open_app", "target": app_name}]
+
+        # ── SLOW BRAIN (LLM) ───────────────────────────────────────────────
 
         user_content = ""
         if memory_context and memory_context != "No previous context.":
